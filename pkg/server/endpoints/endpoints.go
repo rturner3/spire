@@ -14,6 +14,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	_ "google.golang.org/grpc/encoding/gzip" // Install the gzip compressor
 	"google.golang.org/grpc/keepalive"
 
 	"github.com/spiffe/spire/pkg/common/auth"

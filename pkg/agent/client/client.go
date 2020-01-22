@@ -6,6 +6,8 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
+	"github.com/gogo/protobuf/proto"
+	"google.golang.org/grpc/encoding/gzip"
 	"io"
 	"net/url"
 	"sync"
@@ -88,7 +90,7 @@ func (c *client) FetchUpdates(ctx context.Context, req *node.FetchX509SVIDReques
 	}
 	defer nodeConn.Release()
 
-	stream, err := nodeClient.FetchX509SVID(ctx)
+	stream, err := nodeClient.FetchX509SVID(ctx, grpc.UseCompressor(gzip.Name))
 	// We weren't able to get a stream...close the client and return the error.
 	if err != nil {
 		c.release(nodeConn)
@@ -126,6 +128,13 @@ func (c *client) FetchUpdates(ctx context.Context, req *node.FetchX509SVIDReques
 			c.c.Log.Warn("empty update in SVID update stream")
 			continue
 		}
+
+		c.c.Log.WithFields(logrus.Fields{
+			"response_size": proto.Size(resp),
+			"num_registration_entries": len(resp.SvidUpdate.RegistrationEntries),
+			"num_trust_bundles": len(resp.SvidUpdate.Bundles),
+			"num_svids": len(resp.SvidUpdate.Svids),
+		}).Debug("Received registration entries")
 
 		for _, re := range resp.SvidUpdate.RegistrationEntries {
 			if err := validateRegistrationEntry(re); err != nil {
