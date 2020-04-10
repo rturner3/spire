@@ -11,6 +11,7 @@ import (
 	"github.com/spiffe/spire/pkg/common/telemetry"
 	datastore_telemetry "github.com/spiffe/spire/pkg/common/telemetry/server/datastore"
 	"github.com/spiffe/spire/pkg/server/plugin/datastore"
+	ds_kv "github.com/spiffe/spire/pkg/server/plugin/datastore/kv"
 	ds_sql "github.com/spiffe/spire/pkg/server/plugin/datastore/sql"
 	"github.com/spiffe/spire/pkg/server/plugin/hostservices"
 	"github.com/spiffe/spire/pkg/server/plugin/keymanager"
@@ -52,6 +53,7 @@ var (
 
 	builtIns = []catalog.Plugin{
 		// DataStores
+		ds_kv.BuiltIn(),
 		ds_sql.BuiltIn(),
 		// NodeAttestors
 		na_aws_iid.BuiltIn(),
