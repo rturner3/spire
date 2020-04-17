@@ -357,7 +357,7 @@ func (p *Plugin) Configure(ctx context.Context, req *spi.ConfigureRequest) (*spi
 	case "mysql":
 		kv, err = mysqlkv.Open(config.ConnectionString)
 	default:
-		return nil, status.Errorf(codes.InvalidArgument, "unsupported database type %s", config.DatabaseType)
+		return nil, status.Errorf(codes.InvalidArgument, "unsupported database_type: %s", config.DatabaseType)
 	}
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
