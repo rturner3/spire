@@ -52,11 +52,51 @@ connection_string = "%s"
 }
 
 func (s *PluginSuite) TestInvalidPluginConfiguration() {
-	_, err := s.ds.Configure(context.Background(), &spi.ConfigureRequest{
-		Configuration: `
+	var err error
+	malformedCfg := `
+	yaml: isNotSupported
+`
+	_, err = s.ds.Configure(context.Background(), &spi.ConfigureRequest{
+		Configuration: malformedCfg,
+	})
+	s.RequireErrorContains(err, datastoreKvErrorString("unable to parse config"))
+
+	missingDbTypeCfg := `
+		connection_string = "bad"
+`
+	_, err = s.ds.Configure(context.Background(), &spi.ConfigureRequest{
+		Configuration: missingDbTypeCfg,
+	})
+	s.RequireErrorContains(err, datastoreKvErrorString("database_type must be set"))
+
+	missingConnStrCfg := fmt.Sprintf(`database_type = "%s"`, sqlite3)
+	_, err = s.ds.Configure(context.Background(), &spi.ConfigureRequest{
+		Configuration: missingConnStrCfg,
+	})
+	s.RequireErrorContains(err, datastoreKvErrorString("connection_string must be set"))
+
+	unknownDbTypeCfg := `
 		database_type = "wrong"
 		connection_string = "bad"
-		`,
+`
+	_, err = s.ds.Configure(context.Background(), &spi.ConfigureRequest{
+		Configuration: unknownDbTypeCfg,
 	})
-	s.RequireErrorContains(err, "unsupported database_type: wrong")
+	s.RequireErrorContains(err, datastoreKvErrorString("unsupported database_type: wrong"))
+}
+
+func (s *PluginSuite) TestInvalidMySQLConfiguration() {
+	var err error
+	badConnStrCfg := `
+		database_type = "mysql"
+		connection_string = "bad"
+`
+	_, err = s.ds.Configure(context.Background(), &spi.ConfigureRequest{
+		Configuration: badConnStrCfg,
+	})
+	s.RequireErrorContains(err, datastoreKvErrorString("invalid connection_string"))
+}
+
+func datastoreKvErrorString(errorStr string) string {
+	return fmt.Sprintf("datastore-kv: %s", errorStr)
 }

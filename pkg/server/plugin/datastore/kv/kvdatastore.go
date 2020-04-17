@@ -3,8 +3,11 @@ package kv
 import (
 	"context"
 	"encoding/base64"
+	"errors"
+	"fmt"
 	"strings"
 
+	"github.com/go-sql-driver/mysql"
 	"github.com/gofrs/uuid"
 	"github.com/gogo/protobuf/proto"
 	"github.com/hashicorp/hcl"
@@ -344,23 +347,26 @@ func (p *Plugin) SetNodeSelectors(ctx context.Context, req *datastore.SetNodeSel
 }
 
 func (p *Plugin) Configure(ctx context.Context, req *spi.ConfigureRequest) (*spi.ConfigureResponse, error) {
+	var err error
 	config := new(Config)
-	if err := hcl.Decode(config, req.Configuration); err != nil {
-		return nil, err
+	if err = hcl.Decode(config, req.Configuration); err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "datastore-kv: unable to parse config: %v", err)
+	}
+	if err = config.Validate(); err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "datastore-kv: %v", err)
 	}
 
 	var kv protokv.KV
-	var err error
 	switch strings.ToLower(config.DatabaseType) {
-	case "sqlite", "sqlite3":
+	case sqlite, sqlite3:
 		kv, err = sqlite3kv.Open(config.ConnectionString)
-	case "mysql":
+	case mySQL:
 		kv, err = mysqlkv.Open(config.ConnectionString)
 	default:
-		return nil, status.Errorf(codes.InvalidArgument, "unsupported database_type: %s", config.DatabaseType)
+		return nil, status.Errorf(codes.InvalidArgument, "datastore-kv: unsupported database_type: %s", config.DatabaseType)
 	}
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return nil, status.Errorf(codes.InvalidArgument, "datastore-kv: %v", err)
 	}
 
 	// TODO: reconfiguration
@@ -454,6 +460,35 @@ func (p *Plugin) listRegistrationEntriesOnce(ctx context.Context,
 		}
 	}
 	return resp, nil
+}
+
+func (c *Config) Validate() error {
+	if c.DatabaseType == "" {
+		return errors.New("database_type must be set")
+	}
+
+	if c.ConnectionString == "" {
+		return errors.New("connection_string must be set")
+	}
+
+	switch c.DatabaseType {
+	case sqlite, sqlite3:
+	case mySQL:
+		return c.validateMySQLConfig()
+	default:
+		return fmt.Errorf("unsupported database_type: %s", c.DatabaseType)
+	}
+
+	return nil
+}
+
+func (c *Config) validateMySQLConfig() error {
+	_, err := mysql.ParseDSN(c.ConnectionString)
+	if err != nil {
+		return fmt.Errorf("invalid connection_string: %w", err)
+	}
+
+	return nil
 }
 
 func doRead(ctx context.Context, store *protokv.Store, in proto.Message, out proto.Message) (bool, error) {

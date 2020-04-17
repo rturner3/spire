@@ -348,3 +348,11 @@ func scanKeyValues(rows *sql.Rows, limit int) ([][]byte, []byte, error) {
 	}
 	return values, token, nil
 }
+
+func validateSource(source string) error {
+	if source == "" {
+		return errs.New("connection_string must be set")
+	}
+
+	return nil
+}
