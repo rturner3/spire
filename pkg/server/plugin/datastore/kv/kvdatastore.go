@@ -120,15 +120,14 @@ func (p *Plugin) FetchBundle(ctx context.Context, req *datastore.FetchBundleRequ
 		TrustDomainId: req.TrustDomainId,
 	}
 	out := new(common.Bundle)
-	ok, err := doRead(ctx, p.bundles, in, out)
-	switch {
-	case err != nil:
+	if err := doRead(ctx, p.bundles, in, out); err != nil {
+		if protokv.NotFound.Has(err) {
+			return nil, status.Errorf(codes.NotFound, err.Error())
+		}
 		return nil, err
-	case ok:
-		return &datastore.FetchBundleResponse{Bundle: out}, nil
-	default:
-		return &datastore.FetchBundleResponse{}, nil
 	}
+
+	return &datastore.FetchBundleResponse{Bundle: out}, nil
 }
 
 func (p *Plugin) ListBundles(ctx context.Context, req *datastore.ListBundlesRequest) (*datastore.ListBundlesResponse, error) {
@@ -162,15 +161,14 @@ func (p *Plugin) DeleteBundle(ctx context.Context, req *datastore.DeleteBundleRe
 func (p *Plugin) FetchAttestedNode(ctx context.Context, req *datastore.FetchAttestedNodeRequest) (*datastore.FetchAttestedNodeResponse, error) {
 	in := &common.AttestedNode{SpiffeId: req.SpiffeId}
 	out := new(common.AttestedNode)
-	ok, err := doRead(ctx, p.attestedNodes, in, out)
-	switch {
-	case err != nil:
+	if err := doRead(ctx, p.attestedNodes, in, out); err != nil {
+		if protokv.NotFound.Has(err) {
+			return nil, status.Errorf(codes.NotFound, err.Error())
+		}
 		return nil, err
-	case ok:
-		return &datastore.FetchAttestedNodeResponse{Node: out}, nil
-	default:
-		return &datastore.FetchAttestedNodeResponse{}, nil
 	}
+
+	return &datastore.FetchAttestedNodeResponse{Node: out}, nil
 }
 
 func (p *Plugin) ListAttestedNodes(ctx context.Context, req *datastore.ListAttestedNodesRequest) (*datastore.ListAttestedNodesResponse, error) {
@@ -197,15 +195,14 @@ func (p *Plugin) DeleteAttestedNode(ctx context.Context, req *datastore.DeleteAt
 func (p *Plugin) FetchJoinToken(ctx context.Context, req *datastore.FetchJoinTokenRequest) (*datastore.FetchJoinTokenResponse, error) {
 	in := &datastore.JoinToken{Token: req.Token}
 	out := new(datastore.JoinToken)
-	ok, err := doRead(ctx, p.joinTokens, in, out)
-	switch {
-	case err != nil:
+	if err := doRead(ctx, p.joinTokens, in, out); err != nil {
+		if protokv.NotFound.Has(err) {
+			return nil, status.Errorf(codes.NotFound, err.Error())
+		}
 		return nil, err
-	case ok:
-		return &datastore.FetchJoinTokenResponse{JoinToken: out}, nil
-	default:
-		return &datastore.FetchJoinTokenResponse{}, nil
 	}
+
+	return &datastore.FetchJoinTokenResponse{JoinToken: out}, nil
 }
 
 func (p *Plugin) CreateJoinToken(ctx context.Context, req *datastore.CreateJoinTokenRequest) (*datastore.CreateJoinTokenResponse, error) {
@@ -225,15 +222,14 @@ func (p *Plugin) FetchRegistrationEntry(ctx context.Context, req *datastore.Fetc
 		EntryId: req.EntryId,
 	}
 	out := new(common.RegistrationEntry)
-	ok, err := doRead(ctx, p.entries, in, out)
-	switch {
-	case err != nil:
+	if err := doRead(ctx, p.entries, in, out); err != nil {
+		if protokv.NotFound.Has(err) {
+			return nil, status.Errorf(codes.NotFound, err.Error())
+		}
 		return nil, err
-	case ok:
-		return &datastore.FetchRegistrationEntryResponse{Entry: out}, nil
-	default:
-		return &datastore.FetchRegistrationEntryResponse{}, nil
 	}
+
+	return &datastore.FetchRegistrationEntryResponse{Entry: out}, nil
 }
 
 func (p *Plugin) ListRegistrationEntries(ctx context.Context, req *datastore.ListRegistrationEntriesRequest) (*datastore.ListRegistrationEntriesResponse, error) {
@@ -324,15 +320,14 @@ func (p *Plugin) CreateRegistrationEntry(ctx context.Context,
 func (p *Plugin) GetNodeSelectors(ctx context.Context, req *datastore.GetNodeSelectorsRequest) (*datastore.GetNodeSelectorsResponse, error) {
 	in := &datastore.NodeSelectors{SpiffeId: req.SpiffeId}
 	out := new(datastore.NodeSelectors)
-	ok, err := doRead(ctx, p.nodeSelectors, in, out)
-	switch {
-	case err != nil:
+	if err := doRead(ctx, p.nodeSelectors, in, out); err != nil {
+		if protokv.NotFound.Has(err) {
+			return nil, status.Errorf(codes.NotFound, err.Error())
+		}
 		return nil, err
-	case ok:
-		return &datastore.GetNodeSelectorsResponse{Selectors: out}, nil
-	default:
-		return &datastore.GetNodeSelectorsResponse{}, nil
 	}
+
+	return &datastore.GetNodeSelectorsResponse{Selectors: out}, nil
 }
 
 func (p *Plugin) SetNodeSelectors(ctx context.Context, req *datastore.SetNodeSelectorsRequest) (*datastore.SetNodeSelectorsResponse, error) {
@@ -491,22 +486,19 @@ func (c *Config) validateMySQLConfig() error {
 	return nil
 }
 
-func doRead(ctx context.Context, store *protokv.Store, in proto.Message, out proto.Message) (bool, error) {
+func doRead(ctx context.Context, store *protokv.Store, in proto.Message, out proto.Message) error {
 	inBytes, err := proto.Marshal(in)
 	if err != nil {
-		return false, errs.Wrap(err)
+		return errs.Wrap(err)
 	}
 	outBytes, err := store.Read(ctx, inBytes)
 	if err != nil {
-		if protokv.NotFound.Has(err) {
-			return false, nil
-		}
-		return false, errs.Wrap(err)
+		return errs.Wrap(err)
 	}
 	if err := proto.Unmarshal(outBytes, out); err != nil {
-		return false, errs.Wrap(err)
+		return errs.Wrap(err)
 	}
-	return true, nil
+	return nil
 }
 
 func newRegistrationEntryID() (string, error) {
