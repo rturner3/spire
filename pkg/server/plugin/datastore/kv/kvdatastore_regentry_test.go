@@ -455,11 +455,6 @@ func (s *PluginSuite) generatePaginationTestData() ([]*common.Selector, []*commo
 		},
 	}
 
-	for _, entry := range entries {
-		createdEntry := s.createRegistrationEntry(entry, s.ds)
-		entry.EntryId = createdEntry.EntryId
-	}
-
 	return selectors, entries
 }
 
@@ -475,6 +470,12 @@ func (s *PluginSuite) generatePaginationTest(pageSize int, testTemplate ListRegi
 
 func (test *ListRegistrationEntryPaginationTest) execute() {
 	s := test.s
+	ds := s.newPlugin()
+	for _, entry := range test.expectedEntries {
+		createdEntry := s.createRegistrationEntry(entry, ds)
+		entry.EntryId = createdEntry.EntryId
+	}
+
 	numExpectedEntries := len(test.expectedEntries)
 	resultsByEntryId := make(map[string]*common.RegistrationEntry, numExpectedEntries)
 	test.req.Pagination = &datastore.Pagination{
@@ -497,7 +498,7 @@ func (test *ListRegistrationEntryPaginationTest) execute() {
 	}
 
 	for reqNum := 1; reqNum <= numExpectedRequests; reqNum++ {
-		resp, err := s.ds.ListRegistrationEntries(ctx, test.req)
+		resp, err := ds.ListRegistrationEntries(ctx, test.req)
 		s.Require().NoError(err)
 		s.Require().NotNil(resp)
 		if reqNum == numExpectedRequests {
@@ -532,7 +533,7 @@ func (test *ListRegistrationEntryPaginationTest) execute() {
 		expectedEntryIds = append(expectedEntryIds, entry.EntryId)
 	}
 
-	s.Assert().ElementsMatch(resultEntryIds, expectedEntryIds)
+	s.Assert().ElementsMatch(expectedEntryIds, resultEntryIds)
 	for _, expectedEntry := range test.expectedEntries {
 		actualEntry, ok := resultsByEntryId[expectedEntry.EntryId]
 		s.Require().True(ok) // duplicate check of entry id from above, to do all we can to avoid panics

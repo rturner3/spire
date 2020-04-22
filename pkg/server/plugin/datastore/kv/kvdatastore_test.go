@@ -52,7 +52,7 @@ connection_string = "%s"
 		Configuration: cfgHcl,
 	}
 
-	_, err := ds.Configure(context.Background(), cfgReq)
+	_, err := ds.Configure(ctx, cfgReq)
 	s.Require().NoError(err)
 
 	return ds
