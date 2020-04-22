@@ -233,8 +233,8 @@ func (p *Plugin) FetchRegistrationEntry(ctx context.Context, req *datastore.Fetc
 }
 
 func (p *Plugin) ListRegistrationEntries(ctx context.Context, req *datastore.ListRegistrationEntriesRequest) (*datastore.ListRegistrationEntriesResponse, error) {
-	if req.Pagination != nil && req.Pagination.PageSize == 0 {
-		return nil, status.Error(codes.InvalidArgument, "cannot paginate with pagesize = 0")
+	if req.Pagination != nil && req.Pagination.PageSize <= 0 {
+		return nil, status.Errorf(codes.InvalidArgument, "cannot paginate with pagesize = %d", req.Pagination.PageSize)
 	}
 	if req.BySelectors != nil && len(req.BySelectors.Selectors) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "cannot list by empty selector set")
