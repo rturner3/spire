@@ -3,6 +3,7 @@ package protokv
 import (
 	"context"
 
+	"github.com/gogo/protobuf/proto"
 	"github.com/zeebo/errs"
 )
 
@@ -32,6 +33,21 @@ func (s *Store) Update(ctx context.Context, value []byte) error {
 
 func (s *Store) Read(ctx context.Context, value []byte) ([]byte, error) {
 	return Read(ctx, s.kv, s.msg, value)
+}
+
+func (s *Store) ReadProto(ctx context.Context, in proto.Message, out proto.Message) error {
+	inBytes, err := proto.Marshal(in)
+	if err != nil {
+		return errs.Wrap(err)
+	}
+	outBytes, err := s.Read(ctx, inBytes)
+	if err != nil {
+		return errs.Wrap(err)
+	}
+	if err := proto.Unmarshal(outBytes, out); err != nil {
+		return errs.Wrap(err)
+	}
+	return nil
 }
 
 func (s *Store) Page(ctx context.Context, token []byte, limit int) ([][]byte, []byte, error) {
