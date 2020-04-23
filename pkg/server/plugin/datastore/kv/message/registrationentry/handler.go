@@ -137,7 +137,7 @@ func (h *handler) listRegistrationEntriesOnce(ctx context.Context,
 			fields = append(fields, selectorsField)
 			setOps = append(setOps, protokv.SetIntersect)
 		default:
-			return nil, errs.New("unhandled match behavior %q", req.BySelectors.Match)
+			return nil, status.Errorf(codes.InvalidArgument, "unhandled match behavior %q", req.BySelectors.Match)
 		}
 	}
 	if req.ByParentId != nil {

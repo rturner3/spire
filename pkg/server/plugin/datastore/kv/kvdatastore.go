@@ -58,6 +58,64 @@ func New() *Plugin {
 	return &Plugin{}
 }
 
+func (p *Plugin) Configure(ctx context.Context, req *spi.ConfigureRequest) (*spi.ConfigureResponse, error) {
+	var err error
+	config := new(Config)
+	if err = hcl.Decode(config, req.Configuration); err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "datastore-kv: unable to parse config: %v", err)
+	}
+	if err = config.Validate(); err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "datastore-kv: %v", err)
+	}
+
+	var kv protokv.KV
+	switch strings.ToLower(config.DatabaseType) {
+	case sqlite, sqlite3:
+		kv, err = sqlite3kv.Open(config.ConnectionString)
+	case mySQL:
+		kv, err = mysqlkv.Open(config.ConnectionString)
+	default:
+		return nil, status.Errorf(codes.InvalidArgument, "datastore-kv: unsupported database_type: %s", config.DatabaseType)
+	}
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "datastore-kv: %v", err)
+	}
+
+	// TODO: reconfiguration
+	p.kv = kv
+	p.bundles = bundle.New(kv)
+	p.attestedNodes = attestednode.New(kv)
+	p.joinTokens = jointoken.New(kv)
+	p.registrationEntries = registrationentry.New(kv)
+	p.nodeSelectors = nodeselector.New(kv)
+
+	return &spi.ConfigureResponse{}, nil
+}
+
+func (p *Plugin) GetPluginInfo(context.Context, *spi.GetPluginInfoRequest) (*spi.GetPluginInfoResponse, error) {
+	return &spi.GetPluginInfoResponse{}, nil
+}
+
+func (c *Config) Validate() error {
+	if c.DatabaseType == "" {
+		return errors.New("database_type must be set")
+	}
+
+	if c.ConnectionString == "" {
+		return errors.New("connection_string must be set")
+	}
+
+	switch c.DatabaseType {
+	case sqlite, sqlite3:
+	case mySQL:
+		return c.validateMySQLConfig()
+	default:
+		return fmt.Errorf("unsupported database_type: %s", c.DatabaseType)
+	}
+
+	return nil
+}
+
 func (p *Plugin) FetchBundle(ctx context.Context, req *datastore.FetchBundleRequest) (*datastore.FetchBundleResponse, error) {
 	return p.bundles.Fetch(ctx, req)
 }
@@ -146,66 +204,8 @@ func (p *Plugin) SetNodeSelectors(ctx context.Context, req *datastore.SetNodeSel
 	return p.nodeSelectors.Set(ctx, req)
 }
 
-func (p *Plugin) Configure(ctx context.Context, req *spi.ConfigureRequest) (*spi.ConfigureResponse, error) {
-	var err error
-	config := new(Config)
-	if err = hcl.Decode(config, req.Configuration); err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "datastore-kv: unable to parse config: %v", err)
-	}
-	if err = config.Validate(); err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "datastore-kv: %v", err)
-	}
-
-	var kv protokv.KV
-	switch strings.ToLower(config.DatabaseType) {
-	case sqlite, sqlite3:
-		kv, err = sqlite3kv.Open(config.ConnectionString)
-	case mySQL:
-		kv, err = mysqlkv.Open(config.ConnectionString)
-	default:
-		return nil, status.Errorf(codes.InvalidArgument, "datastore-kv: unsupported database_type: %s", config.DatabaseType)
-	}
-	if err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "datastore-kv: %v", err)
-	}
-
-	// TODO: reconfiguration
-	p.kv = kv
-	p.bundles = bundle.New(kv)
-	p.attestedNodes = attestednode.New(kv)
-	p.joinTokens = jointoken.New(kv)
-	p.registrationEntries = registrationentry.New(kv)
-	p.nodeSelectors = nodeselector.New(kv)
-
-	return &spi.ConfigureResponse{}, nil
-}
-
-func (p *Plugin) GetPluginInfo(context.Context, *spi.GetPluginInfoRequest) (*spi.GetPluginInfoResponse, error) {
-	return &spi.GetPluginInfoResponse{}, nil
-}
-
 func (p *Plugin) closeDB() error {
 	return p.kv.Close()
-}
-
-func (c *Config) Validate() error {
-	if c.DatabaseType == "" {
-		return errors.New("database_type must be set")
-	}
-
-	if c.ConnectionString == "" {
-		return errors.New("connection_string must be set")
-	}
-
-	switch c.DatabaseType {
-	case sqlite, sqlite3:
-	case mySQL:
-		return c.validateMySQLConfig()
-	default:
-		return fmt.Errorf("unsupported database_type: %s", c.DatabaseType)
-	}
-
-	return nil
 }
 
 func (c *Config) validateMySQLConfig() error {

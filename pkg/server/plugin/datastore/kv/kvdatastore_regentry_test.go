@@ -103,7 +103,64 @@ func (s *PluginSuite) TestListRegistrationEntries() {
 	s.Equal(expectedResponse, resp)
 }
 
-func (s *PluginSuite) TestListParentIDEntries() {
+func (s *PluginSuite) TestListRegistrationEntriesBySelectorsWithNoSelectors() {
+	tests := []struct {
+		name        string
+		bySelectors *datastore.BySelectors
+	}{
+		{
+			name: "nil selectors",
+			bySelectors: &datastore.BySelectors{
+				Match: datastore.BySelectors_MATCH_EXACT,
+			},
+		},
+		{
+			name: "empty selectors",
+			bySelectors: &datastore.BySelectors{
+				Match:     datastore.BySelectors_MATCH_EXACT,
+				Selectors: []*common.Selector{},
+			},
+		},
+	}
+
+	allEntries := make([]*common.RegistrationEntry, 0)
+	s.getTestDataFromJSONFile(filepath.Join("testdata", "entries.json"), &allEntries)
+
+	for _, test := range tests {
+		s.T().Run(test.name, func(t *testing.T) {
+			ds := s.newPlugin()
+			s.createRegistrationEntries(allEntries, ds)
+			req := &datastore.ListRegistrationEntriesRequest{
+				BySelectors: test.bySelectors,
+			}
+
+			_, err := ds.ListRegistrationEntries(ctx, req)
+			s.AssertGRPCStatusContains(err, codes.InvalidArgument, "cannot list by empty selector set")
+		})
+	}
+}
+
+func (s *PluginSuite) TestListRegistrationEntriesWithInvalidSelectorMatch() {
+	allEntries := make([]*common.RegistrationEntry, 0)
+	s.getTestDataFromJSONFile(filepath.Join("testdata", "entries.json"), &allEntries)
+	s.createRegistrationEntries(allEntries, s.ds)
+	req := &datastore.ListRegistrationEntriesRequest{
+		BySelectors: &datastore.BySelectors{
+			Match: datastore.BySelectors_MatchBehavior(-1),
+			Selectors: []*common.Selector{
+				{
+					Type:  "a",
+					Value: "1",
+				},
+			},
+		},
+	}
+
+	_, err := s.ds.ListRegistrationEntries(ctx, req)
+	s.AssertGRPCStatusContains(err, codes.InvalidArgument, "unhandled match behavior")
+}
+
+func (s *PluginSuite) TestListRegistrationEntriesByParentID() {
 	allEntries := make([]*common.RegistrationEntry, 0)
 	s.getTestDataFromJSONFile(filepath.Join("testdata", "entries.json"), &allEntries)
 	tests := []struct {
@@ -201,7 +258,7 @@ func (s *PluginSuite) TestListRegistrationEntriesAgainstMultipleCriteria() {
 	s.RequireProtoListEqual([]*common.RegistrationEntry{createdEntries[0]}, resp.Entries)
 }
 
-func (s *PluginSuite) TestListEntriesBySelectorsExactMatch() {
+func (s *PluginSuite) TestListRegistrationEntriesBySelectorsExactMatch() {
 	allEntries := make([]*common.RegistrationEntry, 0)
 	s.getTestDataFromJSONFile(filepath.Join("testdata", "entries.json"), &allEntries)
 	tests := []struct {
@@ -249,7 +306,7 @@ func (s *PluginSuite) TestListEntriesBySelectorsExactMatch() {
 	}
 }
 
-func (s *PluginSuite) TestListEntriesBySelectorSubset() {
+func (s *PluginSuite) TestListRegistrationEntriesBySelectorSubset() {
 	allEntries := make([]*common.RegistrationEntry, 0)
 	s.getTestDataFromJSONFile(filepath.Join("testdata", "entries.json"), &allEntries)
 	tests := []struct {
