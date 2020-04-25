@@ -114,6 +114,16 @@ database_type = "sqlite3"
 	}
 }
 
+func (s *PluginSuite) TestGetPluginInfo() {
+	resp, err := s.ds.GetPluginInfo(ctx, &spi.GetPluginInfoRequest{})
+	s.Require().NoError(err)
+	s.Require().NotNil(resp)
+	s.Require().NotEqual("", resp.Category)
+	s.Require().NotEqual("", resp.Type)
+	s.Require().NotEqual("", resp.Name)
+	s.Require().NotEqual("", resp.Description)
+}
+
 func (s *PluginSuite) getTestDataFromJSONFile(filePath string, jsonValue interface{}) {
 	jsonBytes, err := ioutil.ReadFile(filePath)
 	s.Require().NoError(err)

@@ -27,6 +27,19 @@ const (
 	PluginName = "kv"
 )
 
+var (
+	pluginInfo = spi.GetPluginInfoResponse{
+		Name:        "kv",
+		Category:    "datastore",
+		Type:        "kv",
+		Description: "Key-value, indexed protocol buffer data store",
+		DateCreated: "",
+		Version:     "",
+		Author:      "",
+		Company:     "",
+	}
+)
+
 func BuiltIn() catalog.Plugin {
 	return builtin(New())
 }
@@ -93,7 +106,7 @@ func (p *Plugin) Configure(ctx context.Context, req *spi.ConfigureRequest) (*spi
 }
 
 func (p *Plugin) GetPluginInfo(context.Context, *spi.GetPluginInfoRequest) (*spi.GetPluginInfoResponse, error) {
-	return &spi.GetPluginInfoResponse{}, nil
+	return &pluginInfo, nil
 }
 
 func (c *Config) Validate() error {
