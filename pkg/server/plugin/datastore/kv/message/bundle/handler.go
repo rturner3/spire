@@ -11,12 +11,12 @@ import (
 )
 
 type handler struct {
-	bundles *protokv.Store
+	store *protokv.Store
 }
 
 func New(kv protokv.KV) Operations {
 	return &handler{
-		bundles: protokv.NewStore(kv, &bundleMessage),
+		store: protokv.NewStore(kv, &bundleMessage),
 	}
 }
 
@@ -37,7 +37,7 @@ func (h *handler) Fetch(ctx context.Context, req *datastore.FetchBundleRequest) 
 		TrustDomainId: req.TrustDomainId,
 	}
 	out := new(common.Bundle)
-	if err := h.bundles.ReadProto(ctx, in, out); err != nil {
+	if err := h.store.ReadProto(ctx, in, out); err != nil {
 		if protokv.NotFound.Has(err) {
 			return nil, status.Errorf(codes.NotFound, err.Error())
 		}
