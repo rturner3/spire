@@ -7,8 +7,6 @@ import (
 	"github.com/spiffe/spire/internal/protokv"
 	"github.com/spiffe/spire/pkg/server/plugin/datastore"
 	"github.com/zeebo/errs"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 type handler struct {
@@ -26,7 +24,13 @@ func (h *handler) Get(ctx context.Context, req *datastore.GetNodeSelectorsReques
 	out := new(datastore.NodeSelectors)
 	if err := h.store.ReadProto(ctx, in, out); err != nil {
 		if protokv.NotFound.Has(err) {
-			return nil, status.Errorf(codes.NotFound, err.Error())
+			// Forcibly suppressing this error to keep the plugin compliant with the existing behavior of the sql plugin.
+			// TODO: Evaluate whether we can return a NotFound gRPC error here and in the sql plugin.
+			return &datastore.GetNodeSelectorsResponse{
+				Selectors: &datastore.NodeSelectors{
+					SpiffeId: req.SpiffeId,
+				},
+			}, nil
 		}
 		return nil, err
 	}
