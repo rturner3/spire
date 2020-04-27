@@ -43,6 +43,10 @@ func (h *handler) Create(ctx context.Context, req *datastore.CreateRegistrationE
 	}, nil
 }
 
+func (h *handler) Delete(ctx context.Context, req *datastore.DeleteRegistrationEntryRequest) (*datastore.DeleteRegistrationEntryResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "not implemented")
+}
+
 func (h *handler) Fetch(ctx context.Context, req *datastore.FetchRegistrationEntryRequest) (*datastore.FetchRegistrationEntryResponse, error) {
 	in := &common.RegistrationEntry{
 		EntryId: req.EntryId,
@@ -118,6 +122,14 @@ func (h *handler) List(ctx context.Context, req *datastore.ListRegistrationEntri
 
 		req.Pagination = resp.Pagination
 	}
+}
+
+func (h *handler) Prune(ctx context.Context, req *datastore.PruneRegistrationEntriesRequest) (*datastore.PruneRegistrationEntriesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "not implemented")
+}
+
+func (h *handler) Update(ctx context.Context, req *datastore.UpdateRegistrationEntryRequest) (*datastore.UpdateRegistrationEntryResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "not implemented")
 }
 
 func (h *handler) listRegistrationEntriesOnce(ctx context.Context,
