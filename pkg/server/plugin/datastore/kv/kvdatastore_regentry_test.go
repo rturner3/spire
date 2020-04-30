@@ -361,11 +361,11 @@ func (s *PluginSuite) TestListRegistrationEntriesBySelectorSubset() {
 }
 
 func (s *PluginSuite) TestListRegistrationEntriesWithPagination() {
-	testTemplates := s.generatePaginationTestTemplates()
+	testTemplates := s.generateListRegistrationPaginationTestTemplates()
 	var tests []ListRegistrationEntryPaginationTest
 	for _, testTempl := range testTemplates {
-		for pageSize := 1; pageSize <= len(testTempl.expectedEntries); pageSize++ {
-			tests = append(tests, s.generatePaginationTest(pageSize, testTempl))
+		for pageSize := 1; pageSize <= len(testTempl.expectedEntries)+1; pageSize++ {
+			tests = append(tests, s.generateRegistrationEntryPaginationTest(pageSize, testTempl))
 		}
 	}
 
@@ -424,8 +424,8 @@ func (s *PluginSuite) createRegistrationEntry(entry *common.RegistrationEntry, d
 	return resp.Entry
 }
 
-func (s *PluginSuite) generatePaginationTestTemplates() []ListRegistrationEntryPaginationTest {
-	selectors, entries := s.generatePaginationTestData()
+func (s *PluginSuite) generateListRegistrationPaginationTestTemplates() []ListRegistrationEntryPaginationTest {
+	selectors, entries := s.generateRegistrationEntryPaginationTestData()
 	return []ListRegistrationEntryPaginationTest{
 		{
 			name:            "all",
@@ -464,7 +464,7 @@ func (s *PluginSuite) generatePaginationTestTemplates() []ListRegistrationEntryP
 	}
 }
 
-func (s *PluginSuite) generatePaginationTestData() ([]*common.Selector, []*common.RegistrationEntry) {
+func (s *PluginSuite) generateRegistrationEntryPaginationTestData() ([]*common.Selector, []*common.RegistrationEntry) {
 	numSelectors := 5
 	selectors := make([]*common.Selector, numSelectors)
 	for i := 1; i <= numSelectors; i++ {
@@ -515,7 +515,7 @@ func (s *PluginSuite) generatePaginationTestData() ([]*common.Selector, []*commo
 	return selectors, entries
 }
 
-func (s *PluginSuite) generatePaginationTest(pageSize int, testTemplate ListRegistrationEntryPaginationTest) ListRegistrationEntryPaginationTest {
+func (s *PluginSuite) generateRegistrationEntryPaginationTest(pageSize int, testTemplate ListRegistrationEntryPaginationTest) ListRegistrationEntryPaginationTest {
 	return ListRegistrationEntryPaginationTest{
 		s:               s,
 		name:            fmt.Sprintf("%s with page size %d", testTemplate.name, pageSize),
@@ -534,65 +534,93 @@ func (test *ListRegistrationEntryPaginationTest) execute() {
 	}
 
 	numExpectedEntries := len(test.expectedEntries)
-	resultsByEntryId := make(map[string]*common.RegistrationEntry, numExpectedEntries)
 	test.req.Pagination = &datastore.Pagination{
 		PageSize: int32(test.pageSize),
 	}
 
-	var numExpectedRequests int
-	lastEmptyRequest := false
-	if numExpectedEntries < test.pageSize {
-		numExpectedEntries = 1
-	} else {
-		if numExpectedEntries%test.pageSize == 0 {
-			// When the last page with results has exactly PageSize number of results,
-			// we will still get a pagination token in the response.
-			// We need to make one more request, which should have no results.
-			lastEmptyRequest = true
-		}
+	resultsByEntryId := s.executePaginatedListRegistrationEntriesRequests(test.pageSize, numExpectedEntries, test.req, ds)
+	s.assertSameRegistrationEntries(test.expectedEntries, resultsByEntryId)
+}
 
-		numExpectedRequests = (numExpectedEntries / test.pageSize) + 1
+func (s *PluginSuite) calculateNumExpectedPagedRequests(numExpectedEntries, pageSize int) (int, bool) {
+	var numExpectedRequests int
+	var lastEmptyRequest bool
+	if numExpectedEntries >= pageSize {
+		// When the last page with results has exactly PageSize number of results,
+		// we will still get a pagination token in the response.
+		// We need to make one more request, which should have no results.
+		lastEmptyRequest = numExpectedEntries%pageSize == 0
+		numExpectedRequests = (numExpectedEntries / pageSize) + 1
+	} else {
+		numExpectedRequests = 1
 	}
+
+	return numExpectedRequests, lastEmptyRequest
+}
+
+func (s *PluginSuite) executePaginatedListRegistrationEntriesRequests(
+	pageSize,
+	numExpectedEntries int,
+	req *datastore.ListRegistrationEntriesRequest,
+	ds datastore.Plugin) map[string]*common.RegistrationEntry {
+
+	resultsByEntryId := make(map[string]*common.RegistrationEntry, numExpectedEntries)
+	numExpectedRequests, lastEmptyRequest := s.calculateNumExpectedPagedRequests(numExpectedEntries, pageSize)
 
 	for reqNum := 1; reqNum <= numExpectedRequests; reqNum++ {
-		resp, err := ds.ListRegistrationEntries(ctx, test.req)
-		s.Require().NoError(err)
-		s.Require().NotNil(resp)
-		if reqNum == numExpectedRequests {
-			if lastEmptyRequest {
-				s.Assert().Empty(resp.Entries)
-				break
-			}
-		} else {
-			s.Require().NotNil(resp.Pagination)
-			s.Require().NotEqual("", resp.Pagination.Token, "didn't receive pagination token for list request #%d out of %d expected requests", reqNum, numExpectedRequests)
-			test.req.Pagination.Token = resp.Pagination.Token
-		}
-
-		s.Require().NotNil(resp.Entries, "received nil entries in response #%d of %d expected requests", reqNum, numExpectedRequests)
-		s.Require().True(len(resp.Entries) > 0, "received empty entries in response #%d of %d expected requests", reqNum, numExpectedRequests)
-
-		for _, entry := range resp.Entries {
-			_, ok := resultsByEntryId[entry.EntryId]
-			s.Assert().False(ok, "received same entry in multiple pages for entry id: %v", entry.EntryId)
-			resultsByEntryId[entry.EntryId] = entry
-		}
+		s.executePaginatedListRegistrationEntriesRequest(reqNum, numExpectedRequests, lastEmptyRequest, req, ds, resultsByEntryId)
 	}
 
-	s.Assert().Equal(len(test.expectedEntries), len(resultsByEntryId))
+	return resultsByEntryId
+}
+
+func (s *PluginSuite) executePaginatedListRegistrationEntriesRequest(
+	reqNum,
+	numExpectedRequests int,
+	lastEmptyRequest bool,
+	req *datastore.ListRegistrationEntriesRequest,
+	ds datastore.Plugin,
+	resultsByEntryId map[string]*common.RegistrationEntry) {
+
+	resp, err := ds.ListRegistrationEntries(ctx, req)
+	s.Require().NoError(err)
+	s.Require().NotNil(resp)
+	if reqNum == numExpectedRequests {
+		if lastEmptyRequest {
+			s.Assert().Empty(resp.Entries)
+			return
+		}
+	} else {
+		s.Require().NotNil(resp.Pagination)
+		s.Require().NotEqual("", resp.Pagination.Token, "didn't receive pagination token for list request #%d out of %d expected requests", reqNum, numExpectedRequests)
+		req.Pagination.Token = resp.Pagination.Token
+	}
+
+	s.Require().NotNil(resp.Entries, "received nil entries in response #%d of %d expected requests", reqNum, numExpectedRequests)
+	s.Require().True(len(resp.Entries) > 0, "received empty entries in response #%d of %d expected requests", reqNum, numExpectedRequests)
+
+	for _, entry := range resp.Entries {
+		_, ok := resultsByEntryId[entry.EntryId]
+		s.Assert().False(ok, "received same entry in multiple pages for entry id: %v", entry.EntryId)
+		resultsByEntryId[entry.EntryId] = entry
+	}
+}
+
+func (s *PluginSuite) assertSameRegistrationEntries(expectedEntries []*common.RegistrationEntry, actualEntriesByEntryId map[string]*common.RegistrationEntry) {
+	s.Assert().Equal(len(expectedEntries), len(actualEntriesByEntryId))
 	var resultEntryIds []string
-	for entryId := range resultsByEntryId {
+	for entryId := range actualEntriesByEntryId {
 		resultEntryIds = append(resultEntryIds, entryId)
 	}
 
 	var expectedEntryIds []string
-	for _, entry := range test.expectedEntries {
+	for _, entry := range expectedEntries {
 		expectedEntryIds = append(expectedEntryIds, entry.EntryId)
 	}
 
 	s.Assert().ElementsMatch(expectedEntryIds, resultEntryIds)
-	for _, expectedEntry := range test.expectedEntries {
-		actualEntry, ok := resultsByEntryId[expectedEntry.EntryId]
+	for _, expectedEntry := range expectedEntries {
+		actualEntry, ok := actualEntriesByEntryId[expectedEntry.EntryId]
 		s.Require().True(ok) // duplicate check of entry id from above, to do all we can to avoid panics
 		s.AssertProtoEqual(expectedEntry, actualEntry)
 	}
