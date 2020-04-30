@@ -25,7 +25,7 @@ type Index struct {
 type KVOps interface {
 	Get(ctx context.Context, key []byte) ([]byte, error)
 	Put(ctx context.Context, key, value []byte) error
-	Delete(ctx context.Context, key []byte) (bool, error)
+	Delete(ctx context.Context, key []byte) error
 	Page(ctx context.Context, prefix []byte, token []byte, limit int) ([][]byte, []byte, error)
 	PageIndex(ctx context.Context, indices []Index, token []byte, limit int) ([][]byte, []byte, error)
 }

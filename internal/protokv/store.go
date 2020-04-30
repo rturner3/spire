@@ -58,7 +58,7 @@ func (s *Store) PageIndex(ctx context.Context, value, token []byte, limit int, f
 	return PageIndex(ctx, s.kv, s.msg, value, token, limit, fields, setOps)
 }
 
-func (s *Store) Delete(ctx context.Context, value []byte) (bool, error) {
+func (s *Store) Delete(ctx context.Context, value []byte) error {
 	return Delete(ctx, s.kv, s.msg, value)
 }
 
@@ -150,7 +150,7 @@ func Update(ctx context.Context, kv KV, msg *Message, newValue []byte) error {
 
 		// Delete those no longer applying to the message.
 		for _, oldKey := range oldKeys {
-			if _, err := tx.Delete(ctx, oldKey); err != nil {
+			if err := tx.Delete(ctx, oldKey); err != nil {
 				return err
 			}
 		}
@@ -217,7 +217,7 @@ func Upsert(ctx context.Context, kv KV, msg *Message, newValue []byte) error {
 
 			// Delete those no longer applying to the message.
 			for _, oldKey := range oldKeys {
-				if _, err := tx.Delete(ctx, oldKey); err != nil {
+				if err := tx.Delete(ctx, oldKey); err != nil {
 					return err
 				}
 			}
@@ -286,23 +286,22 @@ func PageIndex(ctx context.Context, kv KV, msg *Message, value, token []byte, li
 	return kv.PageIndex(ctx, indices, token, limit)
 }
 
-func Delete(ctx context.Context, kv KV, msg *Message, value []byte) (bool, error) {
+func Delete(ctx context.Context, kv KV, msg *Message, value []byte) error {
 	keys, err := getFieldKeys(value, msg.PrimaryKey)
 	if err != nil {
-		return false, err
+		return err
 	}
 
 	pk, err := EncodeKeys(msg.ID, msg.PrimaryKey, keys[0])
 	if err != nil {
-		return false, errs.New("primary key field is not set")
+		return errs.New("primary key field is not set")
 	}
 	if len(pk) > 1 {
-		return false, errs.New("primary key field cannot be repeated")
+		return errs.New("primary key field cannot be repeated")
 	}
 
 	fields := append([]Field{msg.PrimaryKey}, msg.Indices...)
 
-	var found bool
 	err = withTx(ctx, kv, func(tx Tx) error {
 		oldValue, err := tx.Get(ctx, pk[0])
 		if err != nil {
@@ -318,13 +317,15 @@ func Delete(ctx context.Context, kv KV, msg *Message, value []byte) (bool, error
 			return err
 		}
 		for _, key := range keys {
-			if _, err := tx.Delete(ctx, key); err != nil {
+			if err := tx.Delete(ctx, key); err != nil {
 				return err
 			}
 		}
+
 		return nil
 	})
-	return found, err
+
+	return err
 }
 
 func withTx(ctx context.Context, kv KV, fn func(Tx) error) (err error) {

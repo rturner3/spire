@@ -113,8 +113,8 @@ func (kv *KV) PageIndex(ctx context.Context, indices []protokv.Index, token []by
 	return pageIndex(ctx, kv.prepare, indices, token, limit)
 }
 
-func (kv *KV) Delete(ctx context.Context, key []byte) (bool, error) {
-	return delete(ctx, kv.delete, key)
+func (kv *KV) Delete(ctx context.Context, key []byte) error {
+	return deleteEntry(ctx, kv.delete, key)
 }
 
 func (kv *KV) Begin(ctx context.Context) (protokv.Tx, error) {
@@ -166,8 +166,8 @@ func (tx *Tx) PageIndex(ctx context.Context, indices []protokv.Index, token []by
 	return pageIndex(ctx, tx.prepare, indices, token, limit)
 }
 
-func (tx *Tx) Delete(ctx context.Context, key []byte) (bool, error) {
-	return delete(ctx, tx.tx.Stmt(tx.kv.delete), key)
+func (tx *Tx) Delete(ctx context.Context, key []byte) error {
+	return deleteEntry(ctx, tx.tx.Stmt(tx.kv.delete), key)
 }
 
 func (tx *Tx) Commit() error {
@@ -318,16 +318,16 @@ func pageIndex(ctx context.Context, prepare func(string) (*sql.Stmt, error), ind
 	return scanKeyValues(rows, limit)
 }
 
-func delete(ctx context.Context, stmt *sql.Stmt, key []byte) (bool, error) {
+func deleteEntry(ctx context.Context, stmt *sql.Stmt, key []byte) error {
 	result, err := stmt.ExecContext(ctx, key)
 	if err != nil {
-		return false, errs.Wrap(err)
+		return errs.Wrap(err)
 	}
-	rowsAffected, err := result.RowsAffected()
+	_, err = result.RowsAffected()
 	if err != nil {
-		return false, errs.Wrap(err)
+		return errs.Wrap(err)
 	}
-	return rowsAffected > 0, nil
+	return nil
 }
 
 func scanKeyValues(rows *sql.Rows, limit int) ([][]byte, []byte, error) {
