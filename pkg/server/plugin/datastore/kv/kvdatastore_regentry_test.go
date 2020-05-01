@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/golang/protobuf/ptypes/wrappers"
 	"github.com/spiffe/spire/pkg/common/util"
@@ -34,6 +35,79 @@ func (s *PluginSuite) TestCreateRegistrationEntry() {
 	}
 }
 
+func (s *PluginSuite) TestDeleteRegistrationEntry() {
+	// delete non-existing
+	badDeleteReq := &datastore.DeleteRegistrationEntryRequest{
+		EntryId: "badid",
+	}
+
+	_, err := s.ds.DeleteRegistrationEntry(ctx, badDeleteReq)
+	s.RequireGRPCStatusContains(err, codes.NotFound, "registration entry not found for entry id")
+
+	selectors := []*common.Selector{
+		{
+			Type:  "Type1",
+			Value: "Value1",
+		},
+		{
+			Type:  "Type2",
+			Value: "Value2",
+		},
+		{
+			Type:  "Type3",
+			Value: "Value3",
+		},
+		{
+			Type:  "Type4",
+			Value: "Value4",
+		},
+		{
+			Type:  "Type5",
+			Value: "Value5",
+		},
+	}
+
+	entriesToCreate := []*common.RegistrationEntry{
+		{
+			Selectors: selectors[:3],
+			SpiffeId:  "spiffe://example.org/foo",
+			ParentId:  "spiffe://example.org/bar",
+			Ttl:       1,
+		},
+		{
+			Selectors: selectors[2:],
+			SpiffeId:  "spiffe://example.org/baz",
+			ParentId:  "spiffe://example.org/bat",
+			Ttl:       2,
+		},
+	}
+
+	createdEntries := make([]*common.RegistrationEntry, len(entriesToCreate))
+	for i := range entriesToCreate {
+		createdEntries[i] = s.createRegistrationEntry(entriesToCreate[i], s.ds)
+	}
+
+	// We have two registration entries
+	lReq := &datastore.ListRegistrationEntriesRequest{}
+	entriesResp, err := s.ds.ListRegistrationEntries(ctx, lReq)
+	s.Require().NoError(err)
+	s.Require().Len(entriesResp.Entries, 2)
+
+	// Make sure we deleted the right one
+	dReq := &datastore.DeleteRegistrationEntryRequest{
+		EntryId: createdEntries[0].EntryId,
+	}
+
+	delRes, err := s.ds.DeleteRegistrationEntry(ctx, dReq)
+	s.Require().NoError(err)
+	s.Require().Equal(createdEntries[0], delRes.Entry)
+
+	// Make sure we have now only one registration entry
+	entriesResp, err = s.ds.ListRegistrationEntries(ctx, lReq)
+	s.Require().NoError(err)
+	s.Require().Len(entriesResp.Entries, 1)
+}
+
 func (s *PluginSuite) TestFetchRegistrationEntry() {
 	registeredEntry := &common.RegistrationEntry{
 		Selectors: []*common.Selector{
@@ -60,8 +134,9 @@ func (s *PluginSuite) TestFetchRegistrationEntry() {
 
 func (s *PluginSuite) TestFetchNonExistentRegistrationEntry() {
 	fetchRegistrationEntryResponse, err := s.ds.FetchRegistrationEntry(ctx, &datastore.FetchRegistrationEntryRequest{EntryId: "foobar"})
-	s.RequireGRPCStatusContains(err, codes.NotFound, "")
-	s.Require().Nil(fetchRegistrationEntryResponse)
+	s.Require().NoError(err)
+	s.Require().NotNil(fetchRegistrationEntryResponse)
+	s.Require().Nil(fetchRegistrationEntryResponse.Entry)
 }
 
 func (s *PluginSuite) TestListRegistrationEntries() {
@@ -403,6 +478,121 @@ func (s *PluginSuite) TestListRegistrationEntriesWithInvalidPageSize() {
 			s.AssertGRPCStatusContains(err, codes.InvalidArgument, "cannot paginate with pagesize")
 		})
 	}
+}
+
+func (s *PluginSuite) TestPruneRegistrationEntries() {
+	now := time.Now().Unix()
+	registeredEntry := &common.RegistrationEntry{
+		Selectors: []*common.Selector{
+			{Type: "Type1", Value: "Value1"},
+			{Type: "Type2", Value: "Value2"},
+			{Type: "Type3", Value: "Value3"},
+		},
+		SpiffeId:    "SpiffeId",
+		ParentId:    "ParentId",
+		Ttl:         1,
+		EntryExpiry: now,
+	}
+
+	createdEntry := s.createRegistrationEntry(registeredEntry, s.ds)
+
+	// Ensure we don't prune valid entries, wind clock back 10s
+	_, err := s.ds.PruneRegistrationEntries(ctx, &datastore.PruneRegistrationEntriesRequest{
+		ExpiresBefore: now - 10,
+	})
+	s.Require().NoError(err)
+
+	fReq := &datastore.FetchRegistrationEntryRequest{
+		EntryId: createdEntry.EntryId,
+	}
+
+	fetchRegistrationEntryResponse, err := s.ds.FetchRegistrationEntry(ctx, fReq)
+	s.Require().NoError(err)
+	s.Require().NotNil(fetchRegistrationEntryResponse)
+	s.Equal(createdEntry, fetchRegistrationEntryResponse.Entry)
+
+	// Ensure we don't prune on the exact ExpiresBefore
+	pruneNowReq := &datastore.PruneRegistrationEntriesRequest{
+		ExpiresBefore: now,
+	}
+
+	_, err = s.ds.PruneRegistrationEntries(ctx, pruneNowReq)
+	s.Require().NoError(err)
+
+	fetchRegistrationEntryResponse, err = s.ds.FetchRegistrationEntry(ctx, fReq)
+	s.Require().NoError(err)
+	s.Require().NotNil(fetchRegistrationEntryResponse)
+	s.Equal(createdEntry, fetchRegistrationEntryResponse.Entry)
+
+	// Ensure we prune old entries
+	pruneOldReq := &datastore.PruneRegistrationEntriesRequest{
+		ExpiresBefore: now + 10,
+	}
+
+	_, err = s.ds.PruneRegistrationEntries(ctx, pruneOldReq)
+	s.Require().NoError(err)
+
+	fetchRegistrationEntryResponse, err = s.ds.FetchRegistrationEntry(ctx, fReq)
+	s.Require().NoError(err)
+	s.Nil(fetchRegistrationEntryResponse.Entry)
+}
+
+func (s *PluginSuite) TestUpdateRegistrationEntry() {
+	entryToCreate := &common.RegistrationEntry{
+		Selectors: []*common.Selector{
+			{
+				Type:  "Type1",
+				Value: "Value1",
+			},
+			{
+				Type:  "Type2",
+				Value: "Value2",
+			},
+			{
+				Type:  "Type3",
+				Value: "Value3",
+			},
+		},
+		SpiffeId: "spiffe://example.org/foo",
+		ParentId: "spiffe://example.org/bar",
+		Ttl:      1,
+	}
+
+	entry := s.createRegistrationEntry(entryToCreate, s.ds)
+
+	entry.Ttl = 2
+	entry.Admin = true
+	entry.Downstream = true
+
+	uReq := &datastore.UpdateRegistrationEntryRequest{
+		Entry: entry,
+	}
+
+	updateRegistrationEntryResponse, err := s.ds.UpdateRegistrationEntry(ctx, uReq)
+
+	s.Require().NoError(err)
+	s.Require().NotNil(updateRegistrationEntryResponse)
+
+	fReq := &datastore.FetchRegistrationEntryRequest{
+		EntryId: entry.EntryId,
+	}
+
+	fetchRegistrationEntryResponse, err := s.ds.FetchRegistrationEntry(ctx, fReq)
+	s.Require().NoError(err)
+	s.Require().NotNil(fetchRegistrationEntryResponse)
+	s.Require().NotNil(fetchRegistrationEntryResponse.Entry)
+	s.RequireProtoEqual(entry, fetchRegistrationEntryResponse.Entry)
+
+	entry.EntryId = "badid"
+	_, err = s.ds.UpdateRegistrationEntry(ctx, uReq)
+
+	s.AssertGRPCStatusContains(err, codes.NotFound, "registration entry not found for entry id")
+}
+
+func (s *PluginSuite) TestUpdateNilEntry() {
+	uReq := &datastore.UpdateRegistrationEntryRequest{}
+	_, err := s.ds.UpdateRegistrationEntry(ctx, uReq)
+	s.AssertGRPCStatusContains(err, codes.InvalidArgument, "entry cannot be nil")
 }
 
 func (s *PluginSuite) createRegistrationEntries(entriesToCreate []*common.RegistrationEntry, ds datastore.Plugin) []*common.RegistrationEntry {

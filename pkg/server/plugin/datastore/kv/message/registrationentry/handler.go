@@ -2,6 +2,7 @@ package registrationentry
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/spiffe/spire/internal/protokv"
@@ -44,17 +45,40 @@ func (h *handler) Create(ctx context.Context, req *datastore.CreateRegistrationE
 }
 
 func (h *handler) Delete(ctx context.Context, req *datastore.DeleteRegistrationEntryRequest) (*datastore.DeleteRegistrationEntryResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "not implemented")
+	in := &common.RegistrationEntry{
+		EntryId: req.EntryId,
+	}
+
+	out := &common.RegistrationEntry{}
+	if err := h.store.ReadProto(ctx, in, out); err != nil {
+		if protokv.NotFound.Has(err) {
+			return nil, status.Errorf(codes.NotFound, "registration entry not found for entry id %s", req.EntryId)
+		}
+		return nil, err
+	}
+
+	outBytes, err := proto.Marshal(out)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := h.store.Delete(ctx, outBytes); err != nil {
+		return nil, err
+	}
+
+	return &datastore.DeleteRegistrationEntryResponse{
+		Entry: out,
+	}, nil
 }
 
 func (h *handler) Fetch(ctx context.Context, req *datastore.FetchRegistrationEntryRequest) (*datastore.FetchRegistrationEntryResponse, error) {
 	in := &common.RegistrationEntry{
 		EntryId: req.EntryId,
 	}
-	out := new(common.RegistrationEntry)
+	out := &common.RegistrationEntry{}
 	if err := h.store.ReadProto(ctx, in, out); err != nil {
 		if protokv.NotFound.Has(err) {
-			return nil, status.Errorf(codes.NotFound, err.Error())
+			return &datastore.FetchRegistrationEntryResponse{}, nil
 		}
 		return nil, err
 	}
@@ -125,17 +149,93 @@ func (h *handler) List(ctx context.Context, req *datastore.ListRegistrationEntri
 }
 
 func (h *handler) Prune(ctx context.Context, req *datastore.PruneRegistrationEntriesRequest) (*datastore.PruneRegistrationEntriesResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "not implemented")
+	var token []byte
+	var limit int
+	values, _, err := h.store.Page(ctx, token, limit)
+	if err != nil {
+		return nil, err
+	}
+
+	entries := make([]*common.RegistrationEntry, len(values))
+	for i, entryBytes := range values {
+		entry := &common.RegistrationEntry{}
+		if err := proto.Unmarshal(entryBytes, entry); err != nil {
+			return nil, err
+		}
+		entries[i] = entry
+	}
+
+	// TODO: Consider creating a "batch" Delete() API in protokv to minimize query load
+	entriesToPrune := h.entriesToPrune(entries, req.ExpiresBefore)
+
+	var errors []error
+	for _, entryToPrune := range entriesToPrune {
+		entryBytes, err := proto.Marshal(entryToPrune)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := h.store.Delete(ctx, entryBytes); err != nil {
+			// Don't block entire operation on one delete failure
+			errors = append(errors, err)
+		}
+	}
+
+	numErrs := len(errors)
+	if numErrs > 0 {
+		return nil, fmt.Errorf("failed to delete %v registration entries", numErrs)
+	}
+
+	return &datastore.PruneRegistrationEntriesResponse{}, nil
 }
 
 func (h *handler) Update(ctx context.Context, req *datastore.UpdateRegistrationEntryRequest) (*datastore.UpdateRegistrationEntryResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "not implemented")
+	if req.Entry == nil {
+		return nil, status.Errorf(codes.InvalidArgument, "entry cannot be nil")
+	}
+
+	reqEntry := req.Entry
+
+	in := &common.RegistrationEntry{
+		EntryId: reqEntry.EntryId,
+	}
+
+	out := &common.RegistrationEntry{}
+	if err := h.store.ReadProto(ctx, in, out); err != nil {
+		if protokv.NotFound.Has(err) {
+			return nil, status.Errorf(codes.NotFound, "registration entry not found for entry id %v", reqEntry.EntryId)
+		}
+		return nil, err
+	}
+
+	out.Admin = reqEntry.Admin
+	out.DnsNames = reqEntry.DnsNames
+	out.Downstream = reqEntry.Downstream
+	out.EntryExpiry = reqEntry.EntryExpiry
+	out.EntryId = reqEntry.EntryId
+	out.FederatesWith = reqEntry.FederatesWith
+	out.ParentId = reqEntry.ParentId
+	out.Selectors = reqEntry.Selectors
+	out.Ttl = reqEntry.Ttl
+
+	outBytes, err := proto.Marshal(out)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := h.store.Update(ctx, outBytes); err != nil {
+		return nil, err
+	}
+
+	return &datastore.UpdateRegistrationEntryResponse{
+		Entry: out,
+	}, nil
 }
 
 func (h *handler) listRegistrationEntriesOnce(ctx context.Context,
 	req *datastore.ListRegistrationEntriesRequest) (*datastore.ListRegistrationEntriesResponse, error) {
 
-	msg := new(common.RegistrationEntry)
+	msg := &common.RegistrationEntry{}
 
 	var fields []protokv.Field
 	var setOps []protokv.SetOp
@@ -190,9 +290,9 @@ func (h *handler) listRegistrationEntriesOnce(ctx context.Context,
 		return nil, errs.Wrap(err)
 	}
 
-	resp := new(datastore.ListRegistrationEntriesResponse)
+	resp := &datastore.ListRegistrationEntriesResponse{}
 	for _, value := range values {
-		entry := new(common.RegistrationEntry)
+		entry := &common.RegistrationEntry{}
 		if err := proto.Unmarshal(value, entry); err != nil {
 			return nil, errs.Wrap(err)
 		}
@@ -204,4 +304,15 @@ func (h *handler) listRegistrationEntriesOnce(ctx context.Context,
 		}
 	}
 	return resp, nil
+}
+
+func (h *handler) entriesToPrune(entries []*common.RegistrationEntry, expiresBeforeSeconds int64) []*common.RegistrationEntry {
+	var entriesToPrune []*common.RegistrationEntry
+	for _, entry := range entries {
+		if entry.EntryExpiry < expiresBeforeSeconds {
+			entriesToPrune = append(entriesToPrune, entry)
+		}
+	}
+
+	return entriesToPrune
 }
