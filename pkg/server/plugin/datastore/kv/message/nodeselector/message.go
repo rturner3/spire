@@ -5,8 +5,12 @@ import (
 	"github.com/spiffe/spire/pkg/server/plugin/datastore/kv/message"
 )
 
+const (
+	spiffeIdFieldIndex = iota + 1
+)
+
 var (
-	spiffeIdField       = protokv.StringField(1)
+	spiffeIdField       = protokv.StringField(spiffeIdFieldIndex)
 	nodeSelectorMessage = protokv.Message{
 		ID:         message.NodeSelectorMessageID,
 		PrimaryKey: spiffeIdField,

@@ -5,8 +5,12 @@ import (
 	"github.com/spiffe/spire/pkg/server/plugin/datastore/kv/message"
 )
 
+const (
+	tokenFieldIndex = iota + 1
+)
+
 var (
-	tokenField = protokv.StringField(1)
+	tokenField = protokv.StringField(tokenFieldIndex)
 
 	joinTokenMessage = protokv.Message{
 		ID:         message.JoinTokenMessageID,
