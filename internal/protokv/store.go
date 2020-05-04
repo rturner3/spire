@@ -7,6 +7,7 @@ import (
 	"github.com/zeebo/errs"
 )
 
+// TODO: Support transactions for consumers of Store
 type Store struct {
 	kv  KV
 	msg *Message

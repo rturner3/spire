@@ -28,6 +28,9 @@ type KVOps interface {
 	Delete(ctx context.Context, key []byte) error
 	Page(ctx context.Context, prefix []byte, token []byte, limit int) ([][]byte, []byte, error)
 	PageIndex(ctx context.Context, indices []Index, token []byte, limit int) ([][]byte, []byte, error)
+	// TODO: Implement Has and HasIndex, useful for DeleteBundle() to check for federated entries
+	//Has(ctx context.Context, prefix []byte, token []byte, limit int) ([][]byte, []byte, error)
+	//HasIndex(ctx context.Context, indices []Index, token []byte, limit int) ([][]byte, []byte, error)
 }
 
 type KV interface {
