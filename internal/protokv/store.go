@@ -306,9 +306,6 @@ func Delete(ctx context.Context, kv KV, msg *Message, value []byte) error {
 	err = withTx(ctx, kv, func(tx Tx) error {
 		oldValue, err := tx.Get(ctx, pk[0])
 		if err != nil {
-			if NotFound.Has(err) {
-				return nil
-			}
 			return errs.Wrap(err)
 		}
 
