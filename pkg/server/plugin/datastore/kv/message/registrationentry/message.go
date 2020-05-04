@@ -30,7 +30,7 @@ var (
 	ttlField                 = protokv.Int32Field(ttlFieldIndex)
 	federatesWithField       = protokv.RepeatedSet(protokv.StringField(federatesWithFieldIndex))
 	entryIdField             = protokv.StringField(entryIdFieldIndex)
-	registrationEntryMessage = protokv.Message{
+	RegistrationEntryMessage = protokv.Message{
 		ID:         message.EntryMessageID,
 		PrimaryKey: entryIdField,
 		Indices: []protokv.Field{

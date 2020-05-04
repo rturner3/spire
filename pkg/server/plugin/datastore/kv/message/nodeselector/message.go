@@ -11,7 +11,7 @@ const (
 
 var (
 	spiffeIdField       = protokv.StringField(spiffeIdFieldIndex)
-	nodeSelectorMessage = protokv.Message{
+	NodeSelectorMessage = protokv.Message{
 		ID:         message.NodeSelectorMessageID,
 		PrimaryKey: spiffeIdField,
 	}

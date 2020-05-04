@@ -12,7 +12,7 @@ const (
 var (
 	spiffeIdField = protokv.StringField(spiffeIdFieldIndex)
 
-	attestedNodeMessage = protokv.Message{
+	AttestedNodeMessage = protokv.Message{
 		ID:         message.AttestedNodeMessageID,
 		PrimaryKey: spiffeIdField,
 	}

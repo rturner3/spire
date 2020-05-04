@@ -12,7 +12,7 @@ const (
 var (
 	trustDomainIdField = protokv.StringField(trustDomainIdFieldIndex)
 
-	bundleMessage = protokv.Message{
+	BundleMessage = protokv.Message{
 		ID:         message.BundleMessageID,
 		PrimaryKey: trustDomainIdField,
 	}

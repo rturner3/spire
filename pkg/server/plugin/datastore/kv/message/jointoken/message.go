@@ -12,7 +12,7 @@ const (
 var (
 	tokenField = protokv.StringField(tokenFieldIndex)
 
-	joinTokenMessage = protokv.Message{
+	JoinTokenMessage = protokv.Message{
 		ID:         message.JoinTokenMessageID,
 		PrimaryKey: tokenField,
 	}

@@ -5,6 +5,7 @@ import (
 
 	"github.com/spiffe/spire/internal/protokv"
 	"github.com/spiffe/spire/pkg/server/plugin/datastore"
+	"github.com/spiffe/spire/pkg/server/plugin/datastore/kv/message/registrationentry"
 	"github.com/spiffe/spire/proto/spire/common"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -12,11 +13,13 @@ import (
 
 type handler struct {
 	store *protokv.Store
+	regEntryStore *protokv.Store
 }
 
 func New(kv protokv.KV) Operations {
 	return &handler{
-		store: protokv.NewStore(kv, &bundleMessage),
+		store: protokv.NewStore(kv, &BundleMessage),
+		regEntryStore: protokv.NewStore(kv, &registrationentry.RegistrationEntryMessage),
 	}
 }
 
