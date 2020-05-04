@@ -243,10 +243,10 @@ func (h *handler) listRegistrationEntriesOnce(ctx context.Context,
 		msg.Selectors = req.BySelectors.Selectors
 		switch req.BySelectors.Match {
 		case datastore.BySelectors_MATCH_SUBSET:
-			fields = append(fields, selectorsField)
+			fields = append(fields, SelectorsField)
 			setOps = append(setOps, protokv.SetUnion)
 		case datastore.BySelectors_MATCH_EXACT:
-			fields = append(fields, selectorsField)
+			fields = append(fields, SelectorsField)
 			setOps = append(setOps, protokv.SetIntersect)
 		default:
 			return nil, status.Errorf(codes.InvalidArgument, "unhandled match behavior %q", req.BySelectors.Match)
@@ -254,12 +254,12 @@ func (h *handler) listRegistrationEntriesOnce(ctx context.Context,
 	}
 	if req.ByParentId != nil {
 		msg.ParentId = req.ByParentId.Value
-		fields = append(fields, parentIdField)
+		fields = append(fields, ParentIdField)
 		setOps = append(setOps, protokv.SetDefault)
 	}
 	if req.BySpiffeId != nil {
 		msg.SpiffeId = req.BySpiffeId.Value
-		fields = append(fields, spiffeIdField)
+		fields = append(fields, SpiffeIdField)
 		setOps = append(setOps, protokv.SetDefault)
 	}
 

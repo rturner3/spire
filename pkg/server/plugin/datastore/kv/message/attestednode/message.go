@@ -10,10 +10,10 @@ const (
 )
 
 var (
-	spiffeIdField = protokv.StringField(spiffeIdFieldIndex)
+	SpiffeIdField = protokv.StringField(spiffeIdFieldIndex)
 
 	AttestedNodeMessage = protokv.Message{
 		ID:         message.AttestedNodeMessageID,
-		PrimaryKey: spiffeIdField,
+		PrimaryKey: SpiffeIdField,
 	}
 )

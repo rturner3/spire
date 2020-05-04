@@ -12,13 +12,13 @@ import (
 )
 
 type handler struct {
-	store *protokv.Store
+	store         *protokv.Store
 	regEntryStore *protokv.Store
 }
 
 func New(kv protokv.KV) Operations {
 	return &handler{
-		store: protokv.NewStore(kv, &BundleMessage),
+		store:         protokv.NewStore(kv, &BundleMessage),
 		regEntryStore: protokv.NewStore(kv, &registrationentry.RegistrationEntryMessage),
 	}
 }

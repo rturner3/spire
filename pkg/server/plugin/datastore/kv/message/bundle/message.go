@@ -10,10 +10,10 @@ const (
 )
 
 var (
-	trustDomainIdField = protokv.StringField(trustDomainIdFieldIndex)
+	TrustDomainIdField = protokv.StringField(trustDomainIdFieldIndex)
 
 	BundleMessage = protokv.Message{
 		ID:         message.BundleMessageID,
-		PrimaryKey: trustDomainIdField,
+		PrimaryKey: TrustDomainIdField,
 	}
 )

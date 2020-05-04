@@ -24,21 +24,21 @@ const (
 var (
 	selectorTypeField        = protokv.StringField(selectorTypeFieldIndex)
 	selectorValueField       = protokv.StringField(selectorValueFieldIndex)
-	selectorsField           = protokv.RepeatedSet(protokv.MessageField(selectorsFieldIndex, selectorTypeField, selectorValueField))
-	parentIdField            = protokv.StringField(parentIdFieldIndex)
-	spiffeIdField            = protokv.StringField(spiffeIdFieldIndex)
-	ttlField                 = protokv.Int32Field(ttlFieldIndex)
-	federatesWithField       = protokv.RepeatedSet(protokv.StringField(federatesWithFieldIndex))
-	entryIdField             = protokv.StringField(entryIdFieldIndex)
+	SelectorsField           = protokv.RepeatedSet(protokv.MessageField(selectorsFieldIndex, selectorTypeField, selectorValueField))
+	ParentIdField            = protokv.StringField(parentIdFieldIndex)
+	SpiffeIdField            = protokv.StringField(spiffeIdFieldIndex)
+	TtlField                 = protokv.Int32Field(ttlFieldIndex)
+	FederatesWithField       = protokv.RepeatedSet(protokv.StringField(federatesWithFieldIndex))
+	EntryIdField             = protokv.StringField(entryIdFieldIndex)
 	RegistrationEntryMessage = protokv.Message{
 		ID:         message.EntryMessageID,
-		PrimaryKey: entryIdField,
+		PrimaryKey: EntryIdField,
 		Indices: []protokv.Field{
-			selectorsField,
-			parentIdField,
-			spiffeIdField,
-			ttlField,
-			federatesWithField,
+			SelectorsField,
+			ParentIdField,
+			SpiffeIdField,
+			TtlField,
+			FederatesWithField,
 		},
 	}
 )
