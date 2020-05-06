@@ -815,3 +815,13 @@ func (s *PluginSuite) assertSameRegistrationEntries(expectedEntries []*common.Re
 		s.AssertProtoEqual(expectedEntry, actualEntry)
 	}
 }
+
+func (s *PluginSuite) fetchRegistrationEntry(entryID string) *common.RegistrationEntry {
+	resp, err := s.ds.FetchRegistrationEntry(ctx, &datastore.FetchRegistrationEntryRequest{
+		EntryId: entryID,
+	})
+	s.Require().NoError(err)
+	s.Require().NotNil(resp)
+	s.Require().NotNil(resp.Entry)
+	return resp.Entry
+}

@@ -2,16 +2,27 @@ package kv
 
 import (
 	"context"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/spiffe/spire/pkg/server/plugin/datastore"
 	spi "github.com/spiffe/spire/proto/spire/common/plugin"
+	"github.com/spiffe/spire/test/clock"
 	"github.com/spiffe/spire/test/spiretest"
+	testutil "github.com/spiffe/spire/test/util"
 	"google.golang.org/grpc/codes"
+)
+
+const (
+	ttl                   = time.Hour
+	expiredNotAfterString = "2018-01-10T01:34:00+00:00"
+	validNotAfterString   = "2018-01-10T01:36:00+00:00"
+	middleTimeString      = "2018-01-10T01:35:00+00:00"
 )
 
 var (
@@ -20,6 +31,9 @@ var (
 
 type PluginSuite struct {
 	spiretest.Suite
+
+	cert   *x509.Certificate
+	caCert *x509.Certificate
 
 	dir    string
 	ds     datastore.Plugin
@@ -33,6 +47,36 @@ func TestPlugin(t *testing.T) {
 func (s *PluginSuite) SetupTest() {
 	s.dir = s.TempDir()
 	s.ds = s.newPlugin()
+}
+
+func (s *PluginSuite) SetupSuite() {
+	clk := clock.NewMock(s.T())
+
+	expiredNotAfterTime, err := time.Parse(time.RFC3339, expiredNotAfterString)
+	s.Require().NoError(err)
+	validNotAfterTime, err := time.Parse(time.RFC3339, validNotAfterString)
+	s.Require().NoError(err)
+
+	caTemplate, err := testutil.NewCATemplate(clk, "foo")
+	s.Require().NoError(err)
+
+	caTemplate.NotAfter = expiredNotAfterTime
+	caTemplate.NotBefore = expiredNotAfterTime.Add(-ttl)
+
+	cacert, cakey, err := testutil.SelfSign(caTemplate)
+	s.Require().NoError(err)
+
+	svidTemplate, err := testutil.NewSVIDTemplate(clk, "spiffe://foo/id1")
+	s.Require().NoError(err)
+
+	svidTemplate.NotAfter = validNotAfterTime
+	svidTemplate.NotBefore = validNotAfterTime.Add(-ttl)
+
+	cert, _, err := testutil.Sign(svidTemplate, cacert, cakey)
+	s.Require().NoError(err)
+
+	s.caCert = cacert
+	s.cert = cert
 }
 
 func (s *PluginSuite) newPlugin() datastore.Plugin {
