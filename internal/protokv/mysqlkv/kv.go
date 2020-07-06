@@ -36,11 +36,7 @@ func Open(source string) (_ *KV, err error) {
 
 	// TODO: migration
 
-	if _, err := db.Exec("CREATE TABLE IF NOT EXISTS kv(k VARBINARY(4096) NOT NULL, v BLOB);"); err != nil {
-		return nil, errs.Wrap(err)
-	}
-
-	if _, err := db.Exec("CREATE INDEX IF NOT EXISTS kv_k_idx ON kv(k ASC) USING BTREE;"); err != nil {
+	if _, err := db.Exec("CREATE TABLE IF NOT EXISTS kv(k VARBINARY(3072) PRIMARY KEY, v BLOB);"); err != nil {
 		return nil, errs.Wrap(err)
 	}
 
@@ -292,7 +288,7 @@ func pageIndex(ctx context.Context, prepare func(string) (*sql.Stmt, error), ind
 	}
 
 	if len(token) > 0 {
-		buf.WriteString(" WHERE kv.k > ?\n")
+		buf.WriteString(" AND kv.k > ?\n")
 		args = append(args, token)
 	}
 	buf.WriteString(" ORDER BY kv.k\n")

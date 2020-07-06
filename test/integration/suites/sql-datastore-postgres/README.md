@@ -1,4 +1,4 @@
-# Datastore PostgreSQL Suite
+# `sql` Datastore PostgreSQL Suite
 
 ## Description
 

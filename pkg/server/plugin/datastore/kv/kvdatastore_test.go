@@ -3,6 +3,7 @@ package kv
 import (
 	"context"
 	"crypto/x509"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -15,6 +16,7 @@ import (
 	"github.com/spiffe/spire/test/clock"
 	"github.com/spiffe/spire/test/spiretest"
 	testutil "github.com/spiffe/spire/test/util"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
 )
 
@@ -27,6 +29,9 @@ const (
 
 var (
 	ctx = context.Background()
+
+	TestDialect    string
+	TestConnString string
 )
 
 type PluginSuite struct {
@@ -35,9 +40,10 @@ type PluginSuite struct {
 	cert   *x509.Certificate
 	caCert *x509.Certificate
 
-	dir    string
-	ds     datastore.Plugin
-	nextID int
+	dir      string
+	ds       datastore.Plugin
+	kvPlugin *Plugin
+	nextID   int
 }
 
 func TestPlugin(t *testing.T) {
@@ -79,25 +85,52 @@ func (s *PluginSuite) SetupSuite() {
 	s.cert = cert
 }
 
-func (s *PluginSuite) newPlugin() datastore.Plugin {
-	var ds datastore.Plugin
-	s.LoadPlugin(BuiltIn(), &ds)
+func (s *PluginSuite) TearDownTest() {
+	s.kvPlugin.closeDB()
+}
 
-	// TODO: Support mysql and postgres backends in integration tests, so far just supporting sqlite3 for unit tests
-	s.nextID++
-	dbPath := filepath.Join(s.dir, fmt.Sprintf("db%d.sqlite3", s.nextID))
-	cfgHclTemplate := `
+func (s *PluginSuite) newPlugin() datastore.Plugin {
+	s.kvPlugin = New()
+	var ds datastore.Plugin
+	s.LoadPlugin(builtin(s.kvPlugin), &ds)
+
+	// TODO: Support postgres backend in integration tests
+	// When the test suite is executed normally, we test against sqlite3 since
+	// it requires no external dependencies. The integration test framework
+	// builds the test harness for a specific dialect and connection string
+	switch TestDialect {
+	case "":
+		s.nextID++
+		dbPath := filepath.Join(s.dir, fmt.Sprintf("db%d.sqlite3", s.nextID))
+		cfgHclTemplate := `
 database_type = "sqlite3"
 connection_string = "%s"
 `
 
-	cfgHcl := fmt.Sprintf(cfgHclTemplate, dbPath)
-	cfgReq := &spi.ConfigureRequest{
-		Configuration: cfgHcl,
-	}
+		cfgHcl := fmt.Sprintf(cfgHclTemplate, dbPath)
+		cfgReq := &spi.ConfigureRequest{
+			Configuration: cfgHcl,
+		}
 
-	_, err := ds.Configure(ctx, cfgReq)
-	s.Require().NoError(err)
+		_, err := ds.Configure(ctx, cfgReq)
+		s.Require().NoError(err)
+	case "mysql":
+		s.T().Logf("Connection string: %q", TestConnString)
+		s.Require().NotEmpty(TestConnString, "connection string must be set")
+		wipeMySQL(s.T(), TestConnString)
+		cfgHclTemplate := `
+database_type = "mysql"
+connection_string = "%s"
+`
+		cfgHcl := fmt.Sprintf(cfgHclTemplate, TestConnString)
+		cfgReq := &spi.ConfigureRequest{
+			Configuration: cfgHcl,
+		}
+		_, err := ds.Configure(context.Background(), cfgReq)
+		s.Require().NoError(err)
+	default:
+		s.Require().FailNowf("Unsupported external test dialect %q", TestDialect)
+	}
 
 	return ds
 }
@@ -178,4 +211,27 @@ func (s *PluginSuite) getTestDataFromJSONFile(filePath string, jsonValue interfa
 
 func kvErrorString(errorStr string) string {
 	return fmt.Sprintf("datastore-kv: %s", errorStr)
+}
+
+func wipeMySQL(t *testing.T, connString string) {
+	db, err := sql.Open("mysql", connString)
+	require.NoError(t, err)
+	defer db.Close()
+
+	rows, err := db.Query(`SELECT table_name FROM information_schema.tables WHERE table_schema = 'spire';`)
+	require.NoError(t, err)
+	defer rows.Close()
+
+	dropTablesInRows(t, db, rows)
+}
+
+func dropTablesInRows(t *testing.T, db *sql.DB, rows *sql.Rows) {
+	for rows.Next() {
+		var q string
+		err := rows.Scan(&q)
+		require.NoError(t, err)
+		_, err = db.Exec("DROP TABLE IF EXISTS " + q + " CASCADE")
+		require.NoError(t, err)
+	}
+	require.NoError(t, rows.Err())
 }

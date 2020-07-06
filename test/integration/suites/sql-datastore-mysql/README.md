@@ -1,4 +1,4 @@
-# Datastore MySQL Suite
+# `sql` Datastore MySQL Suite
 
 ## Description
 
