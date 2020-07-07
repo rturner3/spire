@@ -18,7 +18,7 @@ type handler struct {
 
 func New(kv protokv.KV) Operations {
 	return &handler{
-		store: protokv.NewStore(kv, &AttestedNodeMessage),
+		store: protokv.NewStore(kv, &Message),
 	}
 }
 

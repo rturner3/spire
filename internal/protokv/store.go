@@ -144,7 +144,7 @@ func Update(ctx context.Context, kv KV, msg *Message, newValue []byte) error {
 		// keys present in both old and new.
 
 		// Gather keys to delete
-		oldKeys, err := getExistingKeys(msg.ID, tx, oldValue, fields)
+		oldKeys, err := getExistingKeys(msg.ID, oldValue, fields)
 		if err != nil {
 			return err
 		}
@@ -211,7 +211,7 @@ func Upsert(ctx context.Context, kv KV, msg *Message, newValue []byte) error {
 			// TODO: be smarter about which keys to delete/add (i.e. detect for
 			// keys present in both old and new.
 
-			oldKeys, err := getExistingKeys(msg.ID, tx, oldValue, fields)
+			oldKeys, err := getExistingKeys(msg.ID, oldValue, fields)
 			if err != nil {
 				return err
 			}
@@ -310,7 +310,7 @@ func Delete(ctx context.Context, kv KV, msg *Message, value []byte) error {
 		}
 
 		// Gather keys to delete
-		keys, err := getExistingKeys(msg.ID, tx, oldValue, fields)
+		keys, err := getExistingKeys(msg.ID, oldValue, fields)
 		if err != nil {
 			return err
 		}
@@ -343,7 +343,7 @@ func withTx(ctx context.Context, kv KV, fn func(Tx) error) (err error) {
 	return fn(tx)
 }
 
-func getExistingKeys(msgID uint64, tx Tx, value []byte, fields []Field) ([][]byte, error) {
+func getExistingKeys(msgID uint64, value []byte, fields []Field) ([][]byte, error) {
 	fieldKeys, err := getFieldKeys(value, fields...)
 	if err != nil {
 		return nil, err

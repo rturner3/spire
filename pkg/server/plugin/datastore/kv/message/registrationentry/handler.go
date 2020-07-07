@@ -19,7 +19,7 @@ type handler struct {
 
 func New(kv protokv.KV) Operations {
 	return &handler{
-		store: protokv.NewStore(kv, &RegistrationEntryMessage),
+		store: protokv.NewStore(kv, &Message),
 	}
 }
 
@@ -234,7 +234,6 @@ func (h *handler) Update(ctx context.Context, req *datastore.UpdateRegistrationE
 
 func (h *handler) listRegistrationEntriesOnce(ctx context.Context,
 	req *datastore.ListRegistrationEntriesRequest) (*datastore.ListRegistrationEntriesResponse, error) {
-
 	msg := &common.RegistrationEntry{}
 
 	var fields []protokv.Field
@@ -254,12 +253,12 @@ func (h *handler) listRegistrationEntriesOnce(ctx context.Context,
 	}
 	if req.ByParentId != nil {
 		msg.ParentId = req.ByParentId.Value
-		fields = append(fields, ParentIdField)
+		fields = append(fields, ParentIDField)
 		setOps = append(setOps, protokv.SetDefault)
 	}
 	if req.BySpiffeId != nil {
 		msg.SpiffeId = req.BySpiffeId.Value
-		fields = append(fields, SpiffeIdField)
+		fields = append(fields, SpiffeIDField)
 		setOps = append(setOps, protokv.SetDefault)
 	}
 
@@ -280,7 +279,8 @@ func (h *handler) listRegistrationEntriesOnce(ctx context.Context,
 	if len(fields) == 0 {
 		values, token, err = h.store.Page(ctx, token, limit)
 	} else {
-		msgBytes, err := proto.Marshal(msg)
+		var msgBytes []byte
+		msgBytes, err = proto.Marshal(msg)
 		if err != nil {
 			return nil, errs.Wrap(err)
 		}

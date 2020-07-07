@@ -86,7 +86,7 @@ func (s *PluginSuite) SetupSuite() {
 }
 
 func (s *PluginSuite) TearDownTest() {
-	s.kvPlugin.closeDB()
+	require.NoError(s.T(), s.kvPlugin.closeDB())
 }
 
 func (s *PluginSuite) newPlugin() datastore.Plugin {
@@ -182,11 +182,13 @@ database_type = "sqlite3"
 	}
 
 	for _, test := range tests {
+		cfg := test.cfg
+		errorMsg := test.errorMsg
 		s.T().Run(test.name, func(t *testing.T) {
 			_, err = s.ds.Configure(context.Background(), &spi.ConfigureRequest{
-				Configuration: test.cfg,
+				Configuration: cfg,
 			})
-			s.RequireGRPCStatusContains(err, codes.InvalidArgument, kvErrorString(test.errorMsg))
+			s.RequireGRPCStatusContains(err, codes.InvalidArgument, kvErrorString(errorMsg))
 		})
 	}
 }

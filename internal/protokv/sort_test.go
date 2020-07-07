@@ -34,5 +34,4 @@ func TestKeyOrder(t *testing.T) {
 
 	require.True(t, f > start, "f=%x start=%x", f, start)
 	require.False(t, f <= end, "f=%x end=%x", f, end)
-
 }

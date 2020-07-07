@@ -1,8 +1,7 @@
-package attestednode
+package bundle
 
 import "encoding/base64"
 
-// TODO: Evaluate moving these to a common package to be shared by all message handlers
 func encodePaginationToken(token []byte) string {
 	return base64.RawURLEncoding.EncodeToString(token)
 }

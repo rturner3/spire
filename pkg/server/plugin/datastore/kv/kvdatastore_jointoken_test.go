@@ -66,14 +66,16 @@ func (s *PluginSuite) TestCreateInvalidJoinToken() {
 	}
 
 	for _, test := range tests {
+		expectedErr := test.expectedErr
+		token := test.token
 		s.T().Run(test.name, func(t *testing.T) {
 			ds := s.newPlugin()
 			cReq := &datastore.CreateJoinTokenRequest{
-				JoinToken: test.token,
+				JoinToken: token,
 			}
 
 			_, err := ds.CreateJoinToken(ctx, cReq)
-			s.Assert().Error(err, test.expectedErr)
+			s.Assert().Error(err, expectedErr)
 		})
 	}
 }

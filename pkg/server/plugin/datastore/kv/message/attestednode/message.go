@@ -6,14 +6,14 @@ import (
 )
 
 const (
-	spiffeIdFieldIndex = iota + 1
+	spiffeIDFieldIndex = iota + 1
 )
 
 var (
-	SpiffeIdField = protokv.StringField(spiffeIdFieldIndex)
+	SpiffeIDField = protokv.StringField(spiffeIDFieldIndex)
 
-	AttestedNodeMessage = protokv.Message{
+	Message = protokv.Message{
 		ID:         message.AttestedNodeMessageID,
-		PrimaryKey: SpiffeIdField,
+		PrimaryKey: SpiffeIDField,
 	}
 )

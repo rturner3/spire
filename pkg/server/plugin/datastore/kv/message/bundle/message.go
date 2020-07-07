@@ -6,14 +6,14 @@ import (
 )
 
 const (
-	trustDomainIdFieldIndex = iota + 1
+	trustDomainIDFieldIndex = iota + 1
 )
 
 var (
-	TrustDomainIdField = protokv.StringField(trustDomainIdFieldIndex)
+	TrustDomainIDField = protokv.StringField(trustDomainIDFieldIndex)
 
-	BundleMessage = protokv.Message{
+	Message = protokv.Message{
 		ID:         message.BundleMessageID,
-		PrimaryKey: TrustDomainIdField,
+		PrimaryKey: TrustDomainIDField,
 	}
 )

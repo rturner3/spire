@@ -29,8 +29,8 @@ func New(kv protokv.KV) Operations {
 		//  most likely by adding a SetLogger() method in the message/*/handler structs and having kvdatastore.go's
 		//  SetLogger() call the SetLogger() on the individual message handlers.
 		log:           hclog.NewNullLogger(),
-		store:         protokv.NewStore(kv, &BundleMessage),
-		regEntryStore: protokv.NewStore(kv, &registrationentry.RegistrationEntryMessage),
+		store:         protokv.NewStore(kv, &Message),
+		regEntryStore: protokv.NewStore(kv, &registrationentry.Message),
 	}
 }
 
@@ -108,6 +108,18 @@ func (h *handler) Fetch(ctx context.Context, req *datastore.FetchBundleRequest) 
 func (h *handler) List(ctx context.Context, req *datastore.ListBundlesRequest) (*datastore.ListBundlesResponse, error) {
 	var token []byte
 	var limit int
+	var err error
+	if req.Pagination != nil {
+		if len(req.Pagination.Token) > 0 {
+			token, err = decodePaginationToken(req.Pagination.Token)
+			if err != nil {
+				return nil, status.Errorf(codes.InvalidArgument, "invalid pagination token: %s", req.Pagination.Token)
+			}
+		}
+
+		limit = int(req.Pagination.PageSize)
+	}
+
 	values, token, err := h.store.Page(ctx, token, limit)
 	if err != nil {
 		return nil, err
@@ -121,8 +133,16 @@ func (h *handler) List(ctx context.Context, req *datastore.ListBundlesRequest) (
 		}
 	}
 
+	var pagination *datastore.Pagination
+	if req.Pagination != nil {
+		pagination = &datastore.Pagination{
+			Token: encodePaginationToken(token),
+		}
+	}
+
 	return &datastore.ListBundlesResponse{
-		Bundles: bundles,
+		Bundles:    bundles,
+		Pagination: pagination,
 	}, nil
 }
 

@@ -99,8 +99,6 @@ func (f bytesField) Encode(keys []Key) ([][]byte, error) {
 	return [][]byte{keys[len(keys)-1].Encode(0xff)}, nil
 }
 
-type varintField = bytesField
-
 type messageField struct {
 	bytesField
 	fields []Field
@@ -314,7 +312,7 @@ func enumFields(value []byte, cb func(uint64, []byte) error) error {
 			left = left[4:]
 
 		default:
-			return errs.New("unkown field %d type %d", num, typ)
+			return errs.New("unknown field %d type %d", num, typ)
 		}
 
 		if err := cb(num, data); err != nil {

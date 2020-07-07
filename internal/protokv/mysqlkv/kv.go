@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	// mysql driver uses blank import in normal usage
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/spiffe/spire/internal/protokv"
 	"github.com/zeebo/errs"
@@ -24,6 +25,10 @@ type KV struct {
 }
 
 func Open(source string) (_ *KV, err error) {
+	if err := validateSource(source); err != nil {
+		return nil, errs.Wrap(err)
+	}
+
 	db, err := sql.Open("mysql", source)
 	if err != nil {
 		return nil, errs.Wrap(err)

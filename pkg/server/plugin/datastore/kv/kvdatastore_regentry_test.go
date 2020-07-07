@@ -202,11 +202,12 @@ func (s *PluginSuite) TestListRegistrationEntriesBySelectorsWithNoSelectors() {
 	s.getTestDataFromJSONFile(filepath.Join("testdata", "entries.json"), &allEntries)
 
 	for _, test := range tests {
+		bySelectors := test.bySelectors
 		s.T().Run(test.name, func(t *testing.T) {
 			ds := s.newPlugin()
 			s.createRegistrationEntries(allEntries, ds)
 			req := &datastore.ListRegistrationEntriesRequest{
-				BySelectors: test.bySelectors,
+				BySelectors: bySelectors,
 			}
 
 			_, err := ds.ListRegistrationEntries(ctx, req)
@@ -445,8 +446,9 @@ func (s *PluginSuite) TestListRegistrationEntriesWithPagination() {
 	}
 
 	for _, test := range tests {
+		execute := test.execute
 		s.T().Run(test.name, func(t *testing.T) {
-			test.execute()
+			execute()
 		})
 	}
 }
@@ -467,10 +469,11 @@ func (s *PluginSuite) TestListRegistrationEntriesWithInvalidPageSize() {
 	}
 
 	for _, test := range tests {
+		pageSize := test.pageSize
 		s.T().Run(test.name, func(t *testing.T) {
 			req := &datastore.ListRegistrationEntriesRequest{
 				Pagination: &datastore.Pagination{
-					PageSize: test.pageSize,
+					PageSize: pageSize,
 				},
 			}
 
@@ -728,8 +731,8 @@ func (test *ListRegistrationEntryPaginationTest) execute() {
 		PageSize: int32(test.pageSize),
 	}
 
-	resultsByEntryId := s.executePaginatedListRegistrationEntriesRequests(test.pageSize, numExpectedEntries, test.req, ds)
-	s.assertSameRegistrationEntries(test.expectedEntries, resultsByEntryId)
+	resultsByEntryID := s.executePaginatedListRegistrationEntriesRequests(test.pageSize, numExpectedEntries, test.req, ds)
+	s.assertSameRegistrationEntries(test.expectedEntries, resultsByEntryID)
 }
 
 func (s *PluginSuite) calculateNumExpectedPagedRequests(numExpectedEntries, pageSize int) (int, bool) {
@@ -753,15 +756,14 @@ func (s *PluginSuite) executePaginatedListRegistrationEntriesRequests(
 	numExpectedEntries int,
 	req *datastore.ListRegistrationEntriesRequest,
 	ds datastore.Plugin) map[string]*common.RegistrationEntry {
-
-	resultsByEntryId := make(map[string]*common.RegistrationEntry, numExpectedEntries)
+	resultsByEntryID := make(map[string]*common.RegistrationEntry, numExpectedEntries)
 	numExpectedRequests, lastEmptyRequest := s.calculateNumExpectedPagedRequests(numExpectedEntries, pageSize)
 
 	for reqNum := 1; reqNum <= numExpectedRequests; reqNum++ {
-		s.executePaginatedListRegistrationEntriesRequest(reqNum, numExpectedRequests, lastEmptyRequest, req, ds, resultsByEntryId)
+		s.executePaginatedListRegistrationEntriesRequest(reqNum, numExpectedRequests, lastEmptyRequest, req, ds, resultsByEntryID)
 	}
 
-	return resultsByEntryId
+	return resultsByEntryID
 }
 
 func (s *PluginSuite) executePaginatedListRegistrationEntriesRequest(
@@ -770,8 +772,7 @@ func (s *PluginSuite) executePaginatedListRegistrationEntriesRequest(
 	lastEmptyRequest bool,
 	req *datastore.ListRegistrationEntriesRequest,
 	ds datastore.Plugin,
-	resultsByEntryId map[string]*common.RegistrationEntry) {
-
+	resultsByEntryID map[string]*common.RegistrationEntry) {
 	resp, err := ds.ListRegistrationEntries(ctx, req)
 	s.Require().NoError(err)
 	s.Require().NotNil(resp)
@@ -790,27 +791,27 @@ func (s *PluginSuite) executePaginatedListRegistrationEntriesRequest(
 	s.Require().True(len(resp.Entries) > 0, "received empty entries in response #%d of %d expected requests", reqNum, numExpectedRequests)
 
 	for _, entry := range resp.Entries {
-		_, ok := resultsByEntryId[entry.EntryId]
+		_, ok := resultsByEntryID[entry.EntryId]
 		s.Assert().False(ok, "received same entry in multiple pages for entry id: %v", entry.EntryId)
-		resultsByEntryId[entry.EntryId] = entry
+		resultsByEntryID[entry.EntryId] = entry
 	}
 }
 
-func (s *PluginSuite) assertSameRegistrationEntries(expectedEntries []*common.RegistrationEntry, actualEntriesByEntryId map[string]*common.RegistrationEntry) {
-	s.Assert().Equal(len(expectedEntries), len(actualEntriesByEntryId))
-	var resultEntryIds []string
-	for entryId := range actualEntriesByEntryId {
-		resultEntryIds = append(resultEntryIds, entryId)
+func (s *PluginSuite) assertSameRegistrationEntries(expectedEntries []*common.RegistrationEntry, actualEntriesByEntryID map[string]*common.RegistrationEntry) {
+	s.Assert().Equal(len(expectedEntries), len(actualEntriesByEntryID))
+	var resultEntryIDs []string
+	for entryID := range actualEntriesByEntryID {
+		resultEntryIDs = append(resultEntryIDs, entryID)
 	}
 
-	var expectedEntryIds []string
+	var expectedEntryIDs []string
 	for _, entry := range expectedEntries {
-		expectedEntryIds = append(expectedEntryIds, entry.EntryId)
+		expectedEntryIDs = append(expectedEntryIDs, entry.EntryId)
 	}
 
-	s.Assert().ElementsMatch(expectedEntryIds, resultEntryIds)
+	s.Assert().ElementsMatch(expectedEntryIDs, resultEntryIDs)
 	for _, expectedEntry := range expectedEntries {
-		actualEntry, ok := actualEntriesByEntryId[expectedEntry.EntryId]
+		actualEntry, ok := actualEntriesByEntryID[expectedEntry.EntryId]
 		s.Require().True(ok) // duplicate check of entry id from above, to do all we can to avoid panics
 		s.AssertProtoEqual(expectedEntry, actualEntry)
 	}

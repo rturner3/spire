@@ -173,8 +173,8 @@ func (s *PluginSuite) TestListAttestedNodesWithPagination() {
 					PageSize: int32(test.pageSize),
 				}
 
-				resultsBySpiffeId := s.executePaginatedListAttestedNodesRequests(test.pageSize, numExpectedNodes, test.req, ds)
-				s.assertSameAttestedNodes(test.expectedNodes, resultsBySpiffeId)
+				resultsBySpiffeID := s.executePaginatedListAttestedNodesRequests(test.pageSize, numExpectedNodes, test.req, ds)
+				s.assertSameAttestedNodes(test.expectedNodes, resultsBySpiffeID)
 			})
 		}
 	}
@@ -204,13 +204,15 @@ func (s *PluginSuite) TestListAttestedNodesWithInvalidPagination() {
 	}
 
 	for _, test := range tests {
+		expectedErr := test.expectedErr
+		pagination := test.pagination
 		s.T().Run(test.name, func(t *testing.T) {
 			req := &datastore.ListAttestedNodesRequest{
-				Pagination: test.pagination,
+				Pagination: pagination,
 			}
 
 			_, err := s.ds.ListAttestedNodes(ctx, req)
-			s.AssertGRPCStatusContains(err, codes.InvalidArgument, test.expectedErr)
+			s.AssertGRPCStatusContains(err, codes.InvalidArgument, expectedErr)
 		})
 	}
 }
@@ -286,14 +288,13 @@ func (s *PluginSuite) executePaginatedListAttestedNodesRequests(
 	numExpectedNodes int,
 	req *datastore.ListAttestedNodesRequest,
 	ds datastore.Plugin) map[string]*common.AttestedNode {
-
 	numExpectedRequests, lastEmptyRequest := s.calculateNumExpectedPagedRequests(numExpectedNodes, pageSize)
-	resultsBySpiffeId := make(map[string]*common.AttestedNode, numExpectedNodes)
+	resultsBySpiffeID := make(map[string]*common.AttestedNode, numExpectedNodes)
 	for reqNum := 1; reqNum <= numExpectedRequests; reqNum++ {
-		s.executePaginatedListAttestedNodesRequest(reqNum, numExpectedRequests, lastEmptyRequest, req, ds, resultsBySpiffeId)
+		s.executePaginatedListAttestedNodesRequest(reqNum, numExpectedRequests, lastEmptyRequest, req, ds, resultsBySpiffeID)
 	}
 
-	return resultsBySpiffeId
+	return resultsBySpiffeID
 }
 
 func (s *PluginSuite) executePaginatedListAttestedNodesRequest(
@@ -302,8 +303,7 @@ func (s *PluginSuite) executePaginatedListAttestedNodesRequest(
 	lastEmptyRequest bool,
 	req *datastore.ListAttestedNodesRequest,
 	ds datastore.Plugin,
-	resultsBySpiffeId map[string]*common.AttestedNode) {
-
+	resultsBySpiffeID map[string]*common.AttestedNode) {
 	resp, err := ds.ListAttestedNodes(ctx, req)
 	s.Require().NoError(err)
 	s.Require().NotNil(resp)
@@ -322,27 +322,27 @@ func (s *PluginSuite) executePaginatedListAttestedNodesRequest(
 	s.Require().True(len(resp.Nodes) > 0, "received empty nodes in response #%d of %d expected requests", reqNum, numExpectedRequests)
 
 	for _, node := range resp.Nodes {
-		_, ok := resultsBySpiffeId[node.SpiffeId]
+		_, ok := resultsBySpiffeID[node.SpiffeId]
 		s.Assert().False(ok, "received same node in multiple pages for spiffe id: %v", node.SpiffeId)
-		resultsBySpiffeId[node.SpiffeId] = node
+		resultsBySpiffeID[node.SpiffeId] = node
 	}
 }
 
-func (s *PluginSuite) assertSameAttestedNodes(expectedNodes []*common.AttestedNode, actualNodesBySpiffeId map[string]*common.AttestedNode) {
-	s.Assert().Equal(len(expectedNodes), len(actualNodesBySpiffeId))
-	var resultSpiffeIds []string
-	for spiffeId := range actualNodesBySpiffeId {
-		resultSpiffeIds = append(resultSpiffeIds, spiffeId)
+func (s *PluginSuite) assertSameAttestedNodes(expectedNodes []*common.AttestedNode, actualNodesBySpiffeID map[string]*common.AttestedNode) {
+	s.Assert().Equal(len(expectedNodes), len(actualNodesBySpiffeID))
+	var resultSpiffeIDs []string
+	for spiffeID := range actualNodesBySpiffeID {
+		resultSpiffeIDs = append(resultSpiffeIDs, spiffeID)
 	}
 
-	var expectedSpiffeIds []string
+	var expectedSpiffeIDs []string
 	for _, node := range expectedNodes {
-		expectedSpiffeIds = append(expectedSpiffeIds, node.SpiffeId)
+		expectedSpiffeIDs = append(expectedSpiffeIDs, node.SpiffeId)
 	}
 
-	s.Assert().ElementsMatch(expectedSpiffeIds, resultSpiffeIds)
+	s.Assert().ElementsMatch(expectedSpiffeIDs, resultSpiffeIDs)
 	for _, expectedNode := range expectedNodes {
-		actualNode, ok := actualNodesBySpiffeId[expectedNode.SpiffeId]
+		actualNode, ok := actualNodesBySpiffeID[expectedNode.SpiffeId]
 		s.Require().True(ok)
 		s.AssertProtoEqual(expectedNode, actualNode)
 	}

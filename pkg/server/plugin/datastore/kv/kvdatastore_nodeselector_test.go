@@ -63,11 +63,11 @@ func (s *PluginSuite) TestSetNodeSelectorsUnderLoad() {
 		resultCh := resultChans[i]
 		go func() {
 			id := <-inCh
-			spiffeId := fmt.Sprintf("ID%d", id)
+			spiffeID := fmt.Sprintf("ID%d", id)
 			for j := 0; j < numRequestsPerWorker; j++ {
 				_, err := s.ds.SetNodeSelectors(ctx, &datastore.SetNodeSelectorsRequest{
 					Selectors: &datastore.NodeSelectors{
-						SpiffeId:  spiffeId,
+						SpiffeId:  spiffeID,
 						Selectors: selectors,
 					},
 				})

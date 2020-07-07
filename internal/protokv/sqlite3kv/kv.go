@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	// go-sqlite3 requires a blank import for normal usage
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/spiffe/spire/internal/protokv"
 	"github.com/zeebo/errs"
