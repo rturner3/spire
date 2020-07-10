@@ -94,18 +94,6 @@ func (h *handler) List(ctx context.Context, req *datastore.ListRegistrationEntri
 		return nil, status.Error(codes.InvalidArgument, "cannot list by empty selector set")
 	}
 
-	type selectorKey struct {
-		Type  string
-		Value string
-	}
-	var selectorSet map[selectorKey]struct{}
-	if req.BySelectors != nil {
-		selectorSet = make(map[selectorKey]struct{})
-		for _, s := range req.BySelectors.Selectors {
-			selectorSet[selectorKey{Type: s.Type, Value: s.Value}] = struct{}{}
-		}
-	}
-
 	for {
 		resp, err := h.listRegistrationEntriesOnce(ctx, req)
 		if err != nil {
@@ -113,33 +101,11 @@ func (h *handler) List(ctx context.Context, req *datastore.ListRegistrationEntri
 		}
 
 		// Not filtering by selectors? return what we've got
-		if req.BySelectors == nil ||
-			len(req.BySelectors.Selectors) == 0 {
+		if req.BySelectors == nil || len(resp.Entries) == 0 {
 			return resp, nil
 		}
 
-		matching := make([]*common.RegistrationEntry, 0, len(resp.Entries))
-		for _, entry := range resp.Entries {
-			matches := true
-			switch req.BySelectors.Match {
-			case datastore.BySelectors_MATCH_SUBSET:
-				for _, s := range entry.Selectors {
-					if _, ok := selectorSet[selectorKey{Type: s.Type, Value: s.Value}]; !ok {
-						matches = false
-						break
-					}
-				}
-			case datastore.BySelectors_MATCH_EXACT:
-				// The listing currently contains all entries that have AT LEAST
-				// the provided selectors. We only want those that match exactly.
-				matches = len(entry.Selectors) == len(selectorSet)
-			}
-			if matches {
-				matching = append(matching, entry)
-			}
-		}
-		resp.Entries = matching
-
+		resp.Entries = filterEntriesBySelectorSet(resp.Entries, req.BySelectors.Selectors, req.BySelectors.Match)
 		if len(resp.Entries) > 0 || resp.Pagination == nil || len(resp.Pagination.Token) == 0 {
 			return resp, nil
 		}
@@ -300,10 +266,49 @@ func (h *handler) listRegistrationEntriesOnce(ctx context.Context,
 	}
 	if req.Pagination != nil {
 		resp.Pagination = &datastore.Pagination{
-			Token: encodePaginationToken(token),
+			PageSize: req.Pagination.PageSize,
+			Token:    encodePaginationToken(token),
 		}
 	}
 	return resp, nil
+}
+
+func filterEntriesBySelectorSet(entries []*common.RegistrationEntry, selectors []*common.Selector, matchBehavior datastore.BySelectors_MatchBehavior) []*common.RegistrationEntry {
+	type selectorKey struct {
+		Type  string
+		Value string
+	}
+	selectorSet := make(map[selectorKey]struct{})
+	for _, s := range selectors {
+		selectorSet[selectorKey{Type: s.Type, Value: s.Value}] = struct{}{}
+	}
+
+	isSubset := func(ss []*common.Selector) bool {
+		for _, s := range ss {
+			if _, ok := selectorSet[selectorKey{Type: s.Type, Value: s.Value}]; !ok {
+				return false
+			}
+		}
+		return true
+	}
+
+	matching := make([]*common.RegistrationEntry, 0, len(entries))
+	for _, entry := range entries {
+		matches := true
+		switch matchBehavior {
+		case datastore.BySelectors_MATCH_SUBSET:
+			matches = isSubset(entry.Selectors)
+		case datastore.BySelectors_MATCH_EXACT:
+			// The listing currently contains all entries that have AT LEAST
+			// the provided selectors. We only want those that match exactly.
+			matches = len(entry.Selectors) == len(selectorSet)
+		}
+		if matches {
+			matching = append(matching, entry)
+		}
+	}
+
+	return matching
 }
 
 func (h *handler) entriesToPrune(entries []*common.RegistrationEntry, expiresBeforeSeconds int64) []*common.RegistrationEntry {
