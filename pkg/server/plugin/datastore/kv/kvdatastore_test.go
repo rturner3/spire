@@ -105,6 +105,9 @@ func (s *PluginSuite) newPlugin() datastore.Plugin {
 		cfgHclTemplate := `
 database_type = "sqlite3"
 connection_string = "%s"
+max_conn_lifetime = "2m5s"
+max_open_conns = 8
+max_idle_conns = 8
 `
 
 		cfgHcl := fmt.Sprintf(cfgHclTemplate, dbPath)
@@ -121,6 +124,9 @@ connection_string = "%s"
 		cfgHclTemplate := `
 database_type = "mysql"
 connection_string = "%s"
+max_conn_lifetime = "1m30s"
+max_open_conns = 5
+max_idle_conns = 5
 `
 		cfgHcl := fmt.Sprintf(cfgHclTemplate, TestConnString)
 		cfgReq := &spi.ConfigureRequest{

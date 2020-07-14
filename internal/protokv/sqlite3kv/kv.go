@@ -28,8 +28,8 @@ type KV struct {
 
 var _ protokv.KV = (*KV)(nil)
 
-func Open(source string) (_ *KV, err error) {
-	db, err := open(source)
+func Open(config protokv.Configuration) (_ *KV, err error) {
+	db, err := open(config.ConnectionString)
 	if err != nil {
 		return nil, errs.Wrap(err)
 	}
@@ -38,6 +38,18 @@ func Open(source string) (_ *KV, err error) {
 			_ = db.Close()
 		}
 	}()
+
+	if config.ConnMaxLifetime != nil {
+		db.SetConnMaxLifetime(*config.ConnMaxLifetime)
+	}
+
+	if config.MaxIdleConns != nil {
+		db.SetMaxIdleConns(*config.MaxIdleConns)
+	}
+
+	if config.MaxOpenConns != nil {
+		db.SetMaxOpenConns(*config.MaxOpenConns)
+	}
 
 	// TODO: migration
 

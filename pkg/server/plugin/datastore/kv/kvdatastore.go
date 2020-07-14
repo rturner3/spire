@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/hashicorp/hcl"
@@ -51,8 +52,11 @@ func builtin(p *Plugin) catalog.Plugin {
 }
 
 type Config struct {
-	DatabaseType     string `hcl:"database_type" json:"database_type"`
-	ConnectionString string `hcl:"connection_string" json:"connection_string"`
+	DatabaseType     string  `hcl:"database_type" json:"database_type"`
+	ConnectionString string  `hcl:"connection_string" json:"connection_string"`
+	ConnMaxLifetime  *string `hcl:"conn_max_lifetime" json:"conn_max_lifetime"`
+	MaxOpenConns     *int    `hcl:"max_open_conns" json:"max_open_conns"`
+	MaxIdleConns     *int    `hcl:"max_idle_conns" json:"max_idle_conns"`
 }
 
 type Plugin struct {
@@ -201,12 +205,29 @@ func (p *Plugin) Configure(ctx context.Context, req *spi.ConfigureRequest) (*spi
 		return nil, status.Errorf(codes.InvalidArgument, "datastore-kv: %v", err)
 	}
 
+	var connMaxLifetime *time.Duration
+	if config.ConnMaxLifetime != nil {
+		cml, err := time.ParseDuration(*config.ConnMaxLifetime)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse conn_max_lifetime %q: %v", *config.ConnMaxLifetime, err)
+		}
+
+		connMaxLifetime = &cml
+	}
+
+	kvCfg := protokv.Configuration{
+		ConnectionString: config.ConnectionString,
+		ConnMaxLifetime:  connMaxLifetime,
+		MaxOpenConns:     config.MaxOpenConns,
+		MaxIdleConns:     config.MaxIdleConns,
+	}
+
 	var kv protokv.KV
 	switch strings.ToLower(config.DatabaseType) {
 	case sqlite, sqlite3:
-		kv, err = sqlite3kv.Open(config.ConnectionString)
+		kv, err = sqlite3kv.Open(kvCfg)
 	case mySQL:
-		kv, err = mysqlkv.Open(config.ConnectionString)
+		kv, err = mysqlkv.Open(kvCfg)
 	default:
 		return nil, status.Errorf(codes.InvalidArgument, "datastore-kv: unsupported database_type: %s", config.DatabaseType)
 	}

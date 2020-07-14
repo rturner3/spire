@@ -2,6 +2,7 @@ package protokv
 
 import (
 	"context"
+	"time"
 
 	"github.com/zeebo/errs"
 )
@@ -45,4 +46,11 @@ type Tx interface {
 
 	Commit() error
 	Rollback() error
+}
+
+type Configuration struct {
+	ConnectionString string
+	ConnMaxLifetime  *time.Duration
+	MaxOpenConns     *int
+	MaxIdleConns     *int
 }

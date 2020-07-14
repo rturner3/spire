@@ -24,12 +24,12 @@ type KV struct {
 	closeOnce sync.Once
 }
 
-func Open(source string) (_ *KV, err error) {
-	if err := validateSource(source); err != nil {
+func Open(config protokv.Configuration) (_ *KV, err error) {
+	if err := validateSource(config.ConnectionString); err != nil {
 		return nil, errs.Wrap(err)
 	}
 
-	db, err := sql.Open("mysql", source)
+	db, err := sql.Open("mysql", config.ConnectionString)
 	if err != nil {
 		return nil, errs.Wrap(err)
 	}
@@ -38,6 +38,18 @@ func Open(source string) (_ *KV, err error) {
 			_ = db.Close()
 		}
 	}()
+
+	if config.ConnMaxLifetime != nil {
+		db.SetConnMaxLifetime(*config.ConnMaxLifetime)
+	}
+
+	if config.MaxIdleConns != nil {
+		db.SetMaxIdleConns(*config.MaxIdleConns)
+	}
+
+	if config.MaxOpenConns != nil {
+		db.SetMaxOpenConns(*config.MaxOpenConns)
+	}
 
 	// TODO: migration
 
