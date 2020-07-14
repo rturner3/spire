@@ -314,7 +314,7 @@ func filterEntriesBySelectorSet(entries []*common.RegistrationEntry, selectors [
 func (h *handler) entriesToPrune(entries []*common.RegistrationEntry, expiresBeforeSeconds int64) []*common.RegistrationEntry {
 	var entriesToPrune []*common.RegistrationEntry
 	for _, entry := range entries {
-		if entry.EntryExpiry < expiresBeforeSeconds {
+		if entry.EntryExpiry != 0 && entry.EntryExpiry < expiresBeforeSeconds {
 			entriesToPrune = append(entriesToPrune, entry)
 		}
 	}
