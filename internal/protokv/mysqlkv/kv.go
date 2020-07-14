@@ -14,10 +14,10 @@ import (
 )
 
 type KV struct {
-	db     *sql.DB
-	get    *sql.Stmt
-	put    *sql.Stmt
-	delete *sql.Stmt
+	db  *sql.DB
+	get *sql.Stmt
+	put *sql.Stmt
+	del *sql.Stmt
 
 	stmts sync.Map
 
@@ -77,21 +77,21 @@ func Open(config protokv.Configuration) (_ *KV, err error) {
 		}
 	}()
 
-	delete, err := db.Prepare("DELETE FROM kv WHERE k=?")
+	del, err := db.Prepare("DELETE FROM kv WHERE k=?")
 	if err != nil {
 		return nil, errs.Wrap(err)
 	}
 	defer func() {
 		if err != nil {
-			_ = delete.Close()
+			_ = del.Close()
 		}
 	}()
 
 	return &KV{
-		db:     db,
-		get:    get,
-		put:    put,
-		delete: delete,
+		db:  db,
+		get: get,
+		put: put,
+		del: del,
 	}, nil
 }
 
@@ -102,7 +102,7 @@ func (kv *KV) Close() error {
 			errGroup.Add(value.(*sql.Stmt).Close())
 			return true
 		})
-		errGroup.Add(kv.delete.Close())
+		errGroup.Add(kv.del.Close())
 		errGroup.Add(kv.put.Close())
 		errGroup.Add(kv.get.Close())
 		errGroup.Add(kv.db.Close())
@@ -127,7 +127,7 @@ func (kv *KV) PageIndex(ctx context.Context, indices []protokv.Index, token []by
 }
 
 func (kv *KV) Delete(ctx context.Context, key []byte) error {
-	return deleteEntry(ctx, kv.delete, key)
+	return deleteEntry(ctx, kv.del, key)
 }
 
 func (kv *KV) Begin(ctx context.Context) (protokv.Tx, error) {
@@ -180,7 +180,7 @@ func (tx *Tx) PageIndex(ctx context.Context, indices []protokv.Index, token []by
 }
 
 func (tx *Tx) Delete(ctx context.Context, key []byte) error {
-	return deleteEntry(ctx, tx.tx.Stmt(tx.kv.delete), key)
+	return deleteEntry(ctx, tx.tx.Stmt(tx.kv.del), key)
 }
 
 func (tx *Tx) Commit() error {
