@@ -6,16 +6,19 @@ import (
 	"fmt"
 
 	"github.com/gogo/protobuf/proto"
+	"github.com/hashicorp/go-hclog"
 	"github.com/spiffe/spire/internal/protokv"
 	"github.com/spiffe/spire/pkg/server/plugin/datastore"
 )
 
 type handler struct {
+	log   hclog.Logger
 	store *protokv.Store
 }
 
-func New(kv protokv.KV) Operations {
+func New(kv protokv.KV, log hclog.Logger) Operations {
 	return &handler{
+		log:   log,
 		store: protokv.NewStore(kv, &Message),
 	}
 }

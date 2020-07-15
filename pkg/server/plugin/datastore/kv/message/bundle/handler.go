@@ -22,13 +22,9 @@ type handler struct {
 	regEntryStore *protokv.Store
 }
 
-func New(kv protokv.KV) Operations {
+func New(kv protokv.KV, log hclog.Logger) Operations {
 	return &handler{
-		// TODO: This should use the plugin logger.
-		//  The current plugin logger is not easily accessible from here, will need to add it later,
-		//  most likely by adding a SetLogger() method in the message/*/handler structs and having kvdatastore.go's
-		//  SetLogger() call the SetLogger() on the individual message handlers.
-		log:           hclog.NewNullLogger(),
+		log:           log,
 		store:         protokv.NewStore(kv, &Message),
 		regEntryStore: protokv.NewStore(kv, &registrationentry.Message),
 	}

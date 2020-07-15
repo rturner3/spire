@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/go-sql-driver/mysql"
+	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/hcl"
 	"github.com/spiffe/spire/internal/protokv"
 	"github.com/spiffe/spire/internal/protokv/mysqlkv"
@@ -62,7 +63,8 @@ type Config struct {
 type Plugin struct {
 	datastore.Plugin
 
-	kv protokv.KV
+	log hclog.Logger
+	kv  protokv.KV
 
 	bundles             bundle.Operations
 	attestedNodes       attestednode.Operations
@@ -197,6 +199,10 @@ func (p *Plugin) PruneRegistrationEntries(ctx context.Context, req *datastore.Pr
 
 func (p *Plugin) Configure(ctx context.Context, req *spi.ConfigureRequest) (*spi.ConfigureResponse, error) {
 	var err error
+	if p.log == nil {
+		p.log = hclog.NewNullLogger()
+	}
+
 	config := new(Config)
 	if err = hcl.Decode(config, req.Configuration); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "datastore-kv: unable to parse config: %v", err)
@@ -237,13 +243,17 @@ func (p *Plugin) Configure(ctx context.Context, req *spi.ConfigureRequest) (*spi
 
 	// TODO: reconfiguration
 	p.kv = kv
-	p.bundles = bundle.New(kv)
-	p.attestedNodes = attestednode.New(kv)
-	p.joinTokens = jointoken.New(kv)
-	p.registrationEntries = registrationentry.New(kv)
-	p.nodeSelectors = nodeselector.New(kv)
+	p.bundles = bundle.New(kv, p.log)
+	p.attestedNodes = attestednode.New(kv, p.log)
+	p.joinTokens = jointoken.New(kv, p.log)
+	p.registrationEntries = registrationentry.New(kv, p.log)
+	p.nodeSelectors = nodeselector.New(kv, p.log)
 
 	return &spi.ConfigureResponse{}, nil
+}
+
+func (p *Plugin) SetLogger(log hclog.Logger) {
+	p.log = log
 }
 
 func (p *Plugin) GetPluginInfo(context.Context, *spi.GetPluginInfoRequest) (*spi.GetPluginInfoResponse, error) {
