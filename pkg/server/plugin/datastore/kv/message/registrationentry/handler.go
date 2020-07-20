@@ -53,7 +53,7 @@ func (h *handler) Delete(ctx context.Context, req *datastore.DeleteRegistrationE
 	}
 
 	out := &common.RegistrationEntry{}
-	if err := h.store.ReadProto(ctx, in, out); err != nil {
+	if err := h.store.ReadProto(ctx, in, out, false); err != nil {
 		if protokv.NotFound.Has(err) {
 			return nil, status.Errorf(codes.NotFound, "registration entry not found for entry id %s", req.EntryId)
 		}
@@ -79,7 +79,7 @@ func (h *handler) Fetch(ctx context.Context, req *datastore.FetchRegistrationEnt
 		EntryId: req.EntryId,
 	}
 	out := &common.RegistrationEntry{}
-	if err := h.store.ReadProto(ctx, in, out); err != nil {
+	if err := h.store.ReadProto(ctx, in, out, false); err != nil {
 		if protokv.NotFound.Has(err) {
 			return &datastore.FetchRegistrationEntryResponse{}, nil
 		}
@@ -120,7 +120,7 @@ func (h *handler) List(ctx context.Context, req *datastore.ListRegistrationEntri
 func (h *handler) Prune(ctx context.Context, req *datastore.PruneRegistrationEntriesRequest) (*datastore.PruneRegistrationEntriesResponse, error) {
 	var token []byte
 	var limit int
-	values, _, err := h.store.Page(ctx, token, limit)
+	values, _, err := h.store.Page(ctx, token, limit, false)
 	if err != nil {
 		return nil, err
 	}
@@ -170,7 +170,7 @@ func (h *handler) Update(ctx context.Context, req *datastore.UpdateRegistrationE
 	}
 
 	out := &common.RegistrationEntry{}
-	if err := h.store.ReadProto(ctx, in, out); err != nil {
+	if err := h.store.ReadProto(ctx, in, out, false); err != nil {
 		if protokv.NotFound.Has(err) {
 			return nil, status.Errorf(codes.NotFound, "registration entry not found for entry id %v", reqEntry.EntryId)
 		}
@@ -246,14 +246,14 @@ func (h *handler) listRegistrationEntriesOnce(ctx context.Context,
 
 	var values [][]byte
 	if len(fields) == 0 {
-		values, token, err = h.store.Page(ctx, token, limit)
+		values, token, err = h.store.Page(ctx, token, limit, req.TolerateStale)
 	} else {
 		var msgBytes []byte
 		msgBytes, err = proto.Marshal(msg)
 		if err != nil {
 			return nil, errs.Wrap(err)
 		}
-		values, token, err = h.store.PageIndex(ctx, msgBytes, token, limit, fields, setOps)
+		values, token, err = h.store.PageIndex(ctx, msgBytes, token, limit, fields, setOps, req.TolerateStale)
 	}
 	if err != nil {
 		return nil, errs.Wrap(err)

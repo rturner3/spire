@@ -44,7 +44,7 @@ func (h *handler) Delete(ctx context.Context, req *datastore.DeleteAttestedNodeR
 	in := &common.AttestedNode{SpiffeId: req.SpiffeId}
 	out := &common.AttestedNode{}
 	var err error
-	if err = h.store.ReadProto(ctx, in, out); err != nil {
+	if err = h.store.ReadProto(ctx, in, out, false); err != nil {
 		if protokv.NotFound.Has(err) {
 			return nil, status.Errorf(codes.NotFound, "attested node was not found with spiffe id %s", req.SpiffeId)
 		}
@@ -69,7 +69,7 @@ func (h *handler) Delete(ctx context.Context, req *datastore.DeleteAttestedNodeR
 func (h *handler) Fetch(ctx context.Context, req *datastore.FetchAttestedNodeRequest) (*datastore.FetchAttestedNodeResponse, error) {
 	in := &common.AttestedNode{SpiffeId: req.SpiffeId}
 	out := &common.AttestedNode{}
-	if err := h.store.ReadProto(ctx, in, out); err != nil {
+	if err := h.store.ReadProto(ctx, in, out, true); err != nil {
 		if protokv.NotFound.Has(err) {
 			// Forcibly suppressing this error to keep the plugin compliant with the existing behavior of the sql plugin.
 			// TODO: Evaluate whether we can return a NotFound gRPC error here and in the sql plugin.
@@ -108,7 +108,7 @@ func (h *handler) List(ctx context.Context, req *datastore.ListAttestedNodesRequ
 		limit = int(req.Pagination.PageSize)
 	}
 
-	values, token, err := h.store.Page(ctx, token, limit)
+	values, token, err := h.store.Page(ctx, token, limit, true)
 
 	if err != nil {
 		return nil, errs.Wrap(err)
@@ -139,7 +139,7 @@ func (h *handler) List(ctx context.Context, req *datastore.ListAttestedNodesRequ
 func (h *handler) Update(ctx context.Context, req *datastore.UpdateAttestedNodeRequest) (*datastore.UpdateAttestedNodeResponse, error) {
 	in := &common.AttestedNode{SpiffeId: req.SpiffeId}
 	out := &common.AttestedNode{}
-	if err := h.store.ReadProto(ctx, in, out); err != nil {
+	if err := h.store.ReadProto(ctx, in, out, false); err != nil {
 		return nil, status.Errorf(codes.NotFound, "attested node not found for spiffe id %s", req.SpiffeId)
 	}
 

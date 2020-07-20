@@ -25,7 +25,7 @@ func New(kv protokv.KV, log hclog.Logger) Operations {
 func (h *handler) Get(ctx context.Context, req *datastore.GetNodeSelectorsRequest) (*datastore.GetNodeSelectorsResponse, error) {
 	in := &datastore.NodeSelectors{SpiffeId: req.SpiffeId}
 	out := new(datastore.NodeSelectors)
-	if err := h.store.ReadProto(ctx, in, out); err != nil {
+	if err := h.store.ReadProto(ctx, in, out, req.TolerateStale); err != nil {
 		if protokv.NotFound.Has(err) {
 			// Forcibly suppressing this error to keep the plugin compliant with the existing behavior of the sql plugin.
 			// TODO: Evaluate whether we can return a NotFound gRPC error here and in the sql plugin.

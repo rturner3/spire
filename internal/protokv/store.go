@@ -32,16 +32,16 @@ func (s *Store) Update(ctx context.Context, value []byte) error {
 	return Update(ctx, s.kv, s.msg, value)
 }
 
-func (s *Store) Read(ctx context.Context, value []byte) ([]byte, error) {
-	return Read(ctx, s.kv, s.msg, value)
+func (s *Store) Read(ctx context.Context, value []byte, useReadOnlyReplica bool) ([]byte, error) {
+	return Read(ctx, s.kv, s.msg, value, useReadOnlyReplica)
 }
 
-func (s *Store) ReadProto(ctx context.Context, in proto.Message, out proto.Message) error {
+func (s *Store) ReadProto(ctx context.Context, in proto.Message, out proto.Message, useReadOnlyReplica bool) error {
 	inBytes, err := proto.Marshal(in)
 	if err != nil {
 		return errs.Wrap(err)
 	}
-	outBytes, err := s.Read(ctx, inBytes)
+	outBytes, err := s.Read(ctx, inBytes, useReadOnlyReplica)
 	if err != nil {
 		return errs.Wrap(err)
 	}
@@ -51,12 +51,12 @@ func (s *Store) ReadProto(ctx context.Context, in proto.Message, out proto.Messa
 	return nil
 }
 
-func (s *Store) Page(ctx context.Context, token []byte, limit int) ([][]byte, []byte, error) {
-	return Page(ctx, s.kv, s.msg, token, limit)
+func (s *Store) Page(ctx context.Context, token []byte, limit int, useReadOnlyReplica bool) ([][]byte, []byte, error) {
+	return Page(ctx, s.kv, s.msg, token, limit, useReadOnlyReplica)
 }
 
-func (s *Store) PageIndex(ctx context.Context, value, token []byte, limit int, fields []Field, setOps []SetOp) ([][]byte, []byte, error) {
-	return PageIndex(ctx, s.kv, s.msg, value, token, limit, fields, setOps)
+func (s *Store) PageIndex(ctx context.Context, value, token []byte, limit int, fields []Field, setOps []SetOp, useReadOnlyReplica bool) ([][]byte, []byte, error) {
+	return PageIndex(ctx, s.kv, s.msg, value, token, limit, fields, setOps, useReadOnlyReplica)
 }
 
 func (s *Store) Delete(ctx context.Context, value []byte) error {
@@ -135,7 +135,7 @@ func Update(ctx context.Context, kv KV, msg *Message, newValue []byte) error {
 
 	return withTx(ctx, kv, func(tx Tx) error {
 		// Get the message stored under the primary key
-		oldValue, err := tx.Get(ctx, pk[0])
+		oldValue, err := tx.Get(ctx, pk[0], false)
 		if err != nil {
 			return errs.Wrap(err)
 		}
@@ -201,7 +201,7 @@ func Upsert(ctx context.Context, kv KV, msg *Message, newValue []byte) error {
 
 	return withTx(ctx, kv, func(tx Tx) error {
 		// Get the message stored under the primary key
-		oldValue, err := tx.Get(ctx, pk[0])
+		oldValue, err := tx.Get(ctx, pk[0], false)
 		if err != nil && !NotFound.Has(err) {
 			return errs.Wrap(err)
 		}
@@ -240,7 +240,7 @@ func Upsert(ctx context.Context, kv KV, msg *Message, newValue []byte) error {
 	})
 }
 
-func Read(ctx context.Context, kv KV, msg *Message, value []byte) ([]byte, error) {
+func Read(ctx context.Context, kv KV, msg *Message, value []byte, useReadOnlyReplica bool) ([]byte, error) {
 	keys, err := getFieldKeys(value, msg.PrimaryKey)
 	if err != nil {
 		return nil, err
@@ -254,15 +254,15 @@ func Read(ctx context.Context, kv KV, msg *Message, value []byte) ([]byte, error
 		return nil, errs.New("primary key field cannot be repeated")
 	}
 
-	return kv.Get(ctx, pk[0])
+	return kv.Get(ctx, pk[0], useReadOnlyReplica)
 }
 
-func Page(ctx context.Context, kv KV, msg *Message, token []byte, limit int) ([][]byte, []byte, error) {
+func Page(ctx context.Context, kv KV, msg *Message, token []byte, limit int, useReadOnlyReplica bool) ([][]byte, []byte, error) {
 	prefix := EncodeFieldPrefix(msg.ID, msg.PrimaryKey)
-	return kv.Page(ctx, prefix, token, limit)
+	return kv.Page(ctx, prefix, token, limit, useReadOnlyReplica)
 }
 
-func PageIndex(ctx context.Context, kv KV, msg *Message, value, token []byte, limit int, fields []Field, setOps []SetOp) ([][]byte, []byte, error) {
+func PageIndex(ctx context.Context, kv KV, msg *Message, value, token []byte, limit int, fields []Field, setOps []SetOp, useReadOnlyReplica bool) ([][]byte, []byte, error) {
 	keys, err := getFieldKeys(value, fields...)
 	if err != nil {
 		return nil, nil, err
@@ -284,7 +284,7 @@ func PageIndex(ctx context.Context, kv KV, msg *Message, value, token []byte, li
 		})
 	}
 
-	return kv.PageIndex(ctx, indices, token, limit)
+	return kv.PageIndex(ctx, indices, token, limit, useReadOnlyReplica)
 }
 
 func Delete(ctx context.Context, kv KV, msg *Message, value []byte) error {
@@ -304,7 +304,7 @@ func Delete(ctx context.Context, kv KV, msg *Message, value []byte) error {
 	fields := append([]Field{msg.PrimaryKey}, msg.Indices...)
 
 	err = withTx(ctx, kv, func(tx Tx) error {
-		oldValue, err := tx.Get(ctx, pk[0])
+		oldValue, err := tx.Get(ctx, pk[0], false)
 		if err != nil {
 			return errs.Wrap(err)
 		}

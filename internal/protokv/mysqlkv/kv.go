@@ -14,10 +14,12 @@ import (
 )
 
 type KV struct {
-	db  *sql.DB
-	get *sql.Stmt
-	put *sql.Stmt
-	del *sql.Stmt
+	db    *sql.DB
+	roDB  *sql.DB
+	get   *sql.Stmt
+	roGet *sql.Stmt
+	put   *sql.Stmt
+	del   *sql.Stmt
 
 	stmts sync.Map
 
@@ -38,6 +40,24 @@ func Open(config protokv.Configuration) (_ *KV, err error) {
 			_ = db.Close()
 		}
 	}()
+
+	var roDB *sql.DB
+	if config.RoConnectionString != "" {
+		if err := validateSource(config.RoConnectionString); err != nil {
+			return nil, errs.Wrap(err)
+		}
+
+		roDB, err = sql.Open("mysql", config.RoConnectionString)
+		if err != nil {
+			return nil, errs.Wrap(err)
+		}
+
+		defer func() {
+			if err != nil {
+				_ = db.Close()
+			}
+		}()
+	}
 
 	if config.ConnMaxLifetime != nil {
 		db.SetConnMaxLifetime(*config.ConnMaxLifetime)
@@ -67,6 +87,19 @@ func Open(config protokv.Configuration) (_ *KV, err error) {
 		}
 	}()
 
+	var roGet *sql.Stmt
+	if roDB != nil {
+		roGet, err = roDB.Prepare("SELECT v FROM kv WHERE k = ?")
+		if err != nil {
+			return nil, errs.Wrap(err)
+		}
+		defer func() {
+			if err != nil {
+				_ = get.Close()
+			}
+		}()
+	}
+
 	put, err := db.Prepare("REPLACE INTO kv(k,v) VALUES(?, ?)")
 	if err != nil {
 		return nil, errs.Wrap(err)
@@ -88,10 +121,12 @@ func Open(config protokv.Configuration) (_ *KV, err error) {
 	}()
 
 	return &KV{
-		db:  db,
-		get: get,
-		put: put,
-		del: del,
+		db:    db,
+		roDB:  roDB,
+		get:   get,
+		roGet: roGet,
+		put:   put,
+		del:   del,
 	}, nil
 }
 
@@ -110,20 +145,25 @@ func (kv *KV) Close() error {
 	return errGroup.Err()
 }
 
-func (kv *KV) Get(ctx context.Context, key []byte) ([]byte, error) {
-	return get(ctx, kv.get, key)
+func (kv *KV) Get(ctx context.Context, key []byte, useReadOnlyReplica bool) ([]byte, error) {
+	getStmt := kv.get
+	if useReadOnlyReplica && kv.roGet != nil {
+		getStmt = kv.roGet
+	}
+
+	return get(ctx, getStmt, key)
 }
 
 func (kv *KV) Put(ctx context.Context, key, value []byte) error {
 	return put(ctx, kv.put, key, value)
 }
 
-func (kv *KV) Page(ctx context.Context, prefix, token []byte, limit int) ([][]byte, []byte, error) {
-	return page(ctx, kv.prepare, prefix, token, limit)
+func (kv *KV) Page(ctx context.Context, prefix, token []byte, limit int, useReadOnlyReplica bool) ([][]byte, []byte, error) {
+	return page(ctx, kv.prepare, prefix, token, limit, useReadOnlyReplica)
 }
 
-func (kv *KV) PageIndex(ctx context.Context, indices []protokv.Index, token []byte, limit int) ([][]byte, []byte, error) {
-	return pageIndex(ctx, kv.prepare, indices, token, limit)
+func (kv *KV) PageIndex(ctx context.Context, indices []protokv.Index, token []byte, limit int, useReadOnlyReplica bool) ([][]byte, []byte, error) {
+	return pageIndex(ctx, kv.prepare, indices, token, limit, useReadOnlyReplica)
 }
 
 func (kv *KV) Delete(ctx context.Context, key []byte) error {
@@ -141,12 +181,17 @@ func (kv *KV) Begin(ctx context.Context) (protokv.Tx, error) {
 	}, nil
 }
 
-func (kv *KV) prepare(s string) (*sql.Stmt, error) {
+func (kv *KV) prepare(s string, useReadOnlyReplica bool) (*sql.Stmt, error) {
 	stmtValue, ok := kv.stmts.Load(s)
 	if ok {
 		return stmtValue.(*sql.Stmt), nil
 	}
-	stmt, err := kv.db.Prepare(s)
+	db := kv.db
+	if useReadOnlyReplica && kv.roDB != nil {
+		db = kv.roDB
+	}
+
+	stmt, err := db.Prepare(s)
 	if err != nil {
 		return nil, errs.Wrap(err)
 	}
@@ -163,20 +208,25 @@ type Tx struct {
 	tx *sql.Tx
 }
 
-func (tx *Tx) Get(ctx context.Context, key []byte) ([]byte, error) {
-	return get(ctx, tx.tx.Stmt(tx.kv.get), key)
+func (tx *Tx) Get(ctx context.Context, key []byte, useReadOnlyReplica bool) ([]byte, error) {
+	getStmt := tx.kv.get
+	if useReadOnlyReplica && tx.kv.roGet != nil {
+		getStmt = tx.kv.roGet
+	}
+
+	return get(ctx, tx.tx.Stmt(getStmt), key)
 }
 
 func (tx *Tx) Put(ctx context.Context, key, value []byte) error {
 	return put(ctx, tx.tx.Stmt(tx.kv.put), key, value)
 }
 
-func (tx *Tx) Page(ctx context.Context, prefix, token []byte, limit int) ([][]byte, []byte, error) {
-	return page(ctx, tx.prepare, prefix, token, limit)
+func (tx *Tx) Page(ctx context.Context, prefix, token []byte, limit int, useReadOnlyReplica bool) ([][]byte, []byte, error) {
+	return page(ctx, tx.prepare, prefix, token, limit, useReadOnlyReplica)
 }
 
-func (tx *Tx) PageIndex(ctx context.Context, indices []protokv.Index, token []byte, limit int) ([][]byte, []byte, error) {
-	return pageIndex(ctx, tx.prepare, indices, token, limit)
+func (tx *Tx) PageIndex(ctx context.Context, indices []protokv.Index, token []byte, limit int, useReadOnlyReplica bool) ([][]byte, []byte, error) {
+	return pageIndex(ctx, tx.prepare, indices, token, limit, useReadOnlyReplica)
 }
 
 func (tx *Tx) Delete(ctx context.Context, key []byte) error {
@@ -191,8 +241,8 @@ func (tx *Tx) Rollback() error {
 	return errs.Wrap(tx.tx.Commit())
 }
 
-func (tx *Tx) prepare(s string) (*sql.Stmt, error) {
-	stmt, err := tx.kv.prepare(s)
+func (tx *Tx) prepare(s string, useReadOnlyReplica bool) (*sql.Stmt, error) {
+	stmt, err := tx.kv.prepare(s, useReadOnlyReplica)
 	if err != nil {
 		return nil, err
 	}
@@ -219,7 +269,7 @@ func put(ctx context.Context, stmt *sql.Stmt, key, value []byte) error {
 	return nil
 }
 
-func page(ctx context.Context, prepare func(string) (*sql.Stmt, error), prefix, token []byte, limit int) ([][]byte, []byte, error) {
+func page(ctx context.Context, prepare func(string, bool) (*sql.Stmt, error), prefix, token []byte, limit int, useReadOnlyReplica bool) ([][]byte, []byte, error) {
 	args := []interface{}{prefix, prefix}
 	if len(token) > 0 {
 		args[0] = token
@@ -232,7 +282,7 @@ func page(ctx context.Context, prepare func(string) (*sql.Stmt, error), prefix, 
 		buf.WriteString(strconv.Itoa(limit))
 	}
 
-	stmt, err := prepare(buf.String())
+	stmt, err := prepare(buf.String(), useReadOnlyReplica)
 	if err != nil {
 		return nil, nil, errs.Wrap(err)
 	}
@@ -246,7 +296,7 @@ func page(ctx context.Context, prepare func(string) (*sql.Stmt, error), prefix, 
 	return scanKeyValues(rows, limit)
 }
 
-func pageIndex(ctx context.Context, prepare func(string) (*sql.Stmt, error), indices []protokv.Index, token []byte, limit int) ([][]byte, []byte, error) {
+func pageIndex(ctx context.Context, prepare func(string, bool) (*sql.Stmt, error), indices []protokv.Index, token []byte, limit int, useReadOnlyReplica bool) ([][]byte, []byte, error) {
 	buf := new(strings.Builder)
 	buf.WriteString("SELECT k, v FROM kv WHERE k IN (\n")
 	buf.WriteString("\tSELECT DISTINCT ind FROM\n")
@@ -317,7 +367,7 @@ func pageIndex(ctx context.Context, prepare func(string) (*sql.Stmt, error), ind
 		limit = 0
 	}
 
-	stmt, err := prepare(buf.String())
+	stmt, err := prepare(buf.String(), useReadOnlyReplica)
 	if err != nil {
 		return nil, nil, errs.Wrap(err)
 	}

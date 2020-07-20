@@ -54,7 +54,7 @@ func (h *handler) Delete(ctx context.Context, req *datastore.DeleteJoinTokenRequ
 	}
 
 	out := &datastore.JoinToken{}
-	if err := h.store.ReadProto(ctx, in, out); err != nil {
+	if err := h.store.ReadProto(ctx, in, out, false); err != nil {
 		return nil, err
 	}
 
@@ -78,7 +78,7 @@ func (h *handler) Fetch(ctx context.Context, req *datastore.FetchJoinTokenReques
 	}
 
 	out := &datastore.JoinToken{}
-	if err := h.store.ReadProto(ctx, in, out); err != nil {
+	if err := h.store.ReadProto(ctx, in, out, true); err != nil {
 		// TODO: Prefer to send NotFound here, but keeping it this way for now to match the sql plugin behavior
 		if protokv.NotFound.Has(err) {
 			return &datastore.FetchJoinTokenResponse{}, nil
@@ -92,7 +92,7 @@ func (h *handler) Fetch(ctx context.Context, req *datastore.FetchJoinTokenReques
 func (h *handler) Prune(ctx context.Context, req *datastore.PruneJoinTokensRequest) (*datastore.PruneJoinTokensResponse, error) {
 	var token []byte
 	var limit int
-	values, _, err := h.store.Page(ctx, token, limit)
+	values, _, err := h.store.Page(ctx, token, limit, false)
 	if err != nil {
 		return nil, err
 	}

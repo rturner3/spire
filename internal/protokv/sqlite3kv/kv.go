@@ -114,7 +114,7 @@ func (kv *KV) Close() error {
 	return errGroup.Err()
 }
 
-func (kv *KV) Get(ctx context.Context, key []byte) ([]byte, error) {
+func (kv *KV) Get(ctx context.Context, key []byte, useReadOnlyReplica bool) ([]byte, error) {
 	return get(ctx, kv.get, key)
 }
 
@@ -125,11 +125,11 @@ func (kv *KV) Put(ctx context.Context, key, value []byte) error {
 	return err
 }
 
-func (kv *KV) Page(ctx context.Context, prefix, token []byte, limit int) ([][]byte, []byte, error) {
+func (kv *KV) Page(ctx context.Context, prefix, token []byte, limit int, useReadOnlyReplica bool) ([][]byte, []byte, error) {
 	return page(ctx, kv.prepare, prefix, token, limit)
 }
 
-func (kv *KV) PageIndex(ctx context.Context, indices []protokv.Index, token []byte, limit int) ([][]byte, []byte, error) {
+func (kv *KV) PageIndex(ctx context.Context, indices []protokv.Index, token []byte, limit int, useReadOnlyReplica bool) ([][]byte, []byte, error) {
 	return pageIndex(ctx, kv.prepare, indices, token, limit)
 }
 
@@ -171,7 +171,7 @@ type Tx struct {
 	writeLocked bool
 }
 
-func (tx *Tx) Get(ctx context.Context, key []byte) ([]byte, error) {
+func (tx *Tx) Get(ctx context.Context, key []byte, useReadOnlyReplica bool) ([]byte, error) {
 	return get(ctx, tx.tx.Stmt(tx.kv.get), key)
 }
 
@@ -183,11 +183,11 @@ func (tx *Tx) Put(ctx context.Context, key, value []byte) error {
 	return put(ctx, tx.tx.Stmt(tx.kv.put), key, value)
 }
 
-func (tx *Tx) Page(ctx context.Context, prefix, token []byte, limit int) ([][]byte, []byte, error) {
+func (tx *Tx) Page(ctx context.Context, prefix, token []byte, limit int, useReadOnlyReplica bool) ([][]byte, []byte, error) {
 	return page(ctx, tx.prepare, prefix, token, limit)
 }
 
-func (tx *Tx) PageIndex(ctx context.Context, indices []protokv.Index, token []byte, limit int) ([][]byte, []byte, error) {
+func (tx *Tx) PageIndex(ctx context.Context, indices []protokv.Index, token []byte, limit int, useReadOnlyReplica bool) ([][]byte, []byte, error) {
 	return pageIndex(ctx, tx.prepare, indices, token, limit)
 }
 

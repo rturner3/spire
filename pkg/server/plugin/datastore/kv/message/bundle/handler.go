@@ -40,7 +40,7 @@ func (h *handler) Append(ctx context.Context, req *datastore.AppendBundleRequest
 	}
 
 	out := &common.Bundle{}
-	if err := h.store.ReadProto(ctx, in, out); err != nil {
+	if err := h.store.ReadProto(ctx, in, out, false); err != nil {
 		if protokv.NotFound.Has(err) {
 			return h.appendToNonExistentBundle(ctx, req.Bundle)
 		}
@@ -91,7 +91,7 @@ func (h *handler) Fetch(ctx context.Context, req *datastore.FetchBundleRequest) 
 		TrustDomainId: req.TrustDomainId,
 	}
 	out := new(common.Bundle)
-	if err := h.store.ReadProto(ctx, in, out); err != nil {
+	if err := h.store.ReadProto(ctx, in, out, true); err != nil {
 		if protokv.NotFound.Has(err) {
 			return &datastore.FetchBundleResponse{}, nil
 		}
@@ -116,7 +116,7 @@ func (h *handler) List(ctx context.Context, req *datastore.ListBundlesRequest) (
 		limit = int(req.Pagination.PageSize)
 	}
 
-	values, token, err := h.store.Page(ctx, token, limit)
+	values, token, err := h.store.Page(ctx, token, limit, true)
 	if err != nil {
 		return nil, err
 	}
@@ -148,7 +148,7 @@ func (h *handler) Prune(ctx context.Context, req *datastore.PruneBundleRequest) 
 	}
 
 	current := &common.Bundle{}
-	if err := h.store.ReadProto(ctx, in, current); err != nil {
+	if err := h.store.ReadProto(ctx, in, current, false); err != nil {
 		if protokv.NotFound.Has(err) {
 			return &datastore.PruneBundleResponse{
 				BundleChanged: false,
@@ -308,7 +308,7 @@ func (h *handler) fetchFederatedEntries(ctx context.Context, trustDomainID strin
 	var limit int
 	fields := []protokv.Field{registrationentry.FederatesWithField}
 	setOps := []protokv.SetOp{protokv.SetUnion}
-	values, _, err := h.regEntryStore.PageIndex(ctx, regEntryValue, token, limit, fields, setOps)
+	values, _, err := h.regEntryStore.PageIndex(ctx, regEntryValue, token, limit, fields, setOps, false)
 	if err != nil {
 		return nil, err
 	}

@@ -24,11 +24,11 @@ type Index struct {
 }
 
 type KVOps interface {
-	Get(ctx context.Context, key []byte) ([]byte, error)
+	Get(ctx context.Context, key []byte, useReadOnlyReplica bool) ([]byte, error)
 	Put(ctx context.Context, key, value []byte) error
 	Delete(ctx context.Context, key []byte) error
-	Page(ctx context.Context, prefix []byte, token []byte, limit int) ([][]byte, []byte, error)
-	PageIndex(ctx context.Context, indices []Index, token []byte, limit int) ([][]byte, []byte, error)
+	Page(ctx context.Context, prefix []byte, token []byte, limit int, useReadOnlyReplica bool) ([][]byte, []byte, error)
+	PageIndex(ctx context.Context, indices []Index, token []byte, limit int, useReadOnlyReplica bool) ([][]byte, []byte, error)
 	// TODO: Implement Has and HasIndex, useful for DeleteBundle() to check for federated entries
 	//Has(ctx context.Context, prefix []byte, token []byte, limit int) ([][]byte, []byte, error)
 	//HasIndex(ctx context.Context, indices []Index, token []byte, limit int) ([][]byte, []byte, error)
@@ -49,8 +49,9 @@ type Tx interface {
 }
 
 type Configuration struct {
-	ConnectionString string
-	ConnMaxLifetime  *time.Duration
-	MaxOpenConns     *int
-	MaxIdleConns     *int
+	ConnectionString   string
+	RoConnectionString string
+	ConnMaxLifetime    *time.Duration
+	MaxOpenConns       *int
+	MaxIdleConns       *int
 }

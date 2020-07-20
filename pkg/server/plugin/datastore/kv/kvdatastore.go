@@ -53,11 +53,12 @@ func builtin(p *Plugin) catalog.Plugin {
 }
 
 type Config struct {
-	DatabaseType     string  `hcl:"database_type" json:"database_type"`
-	ConnectionString string  `hcl:"connection_string" json:"connection_string"`
-	ConnMaxLifetime  *string `hcl:"conn_max_lifetime" json:"conn_max_lifetime"`
-	MaxOpenConns     *int    `hcl:"max_open_conns" json:"max_open_conns"`
-	MaxIdleConns     *int    `hcl:"max_idle_conns" json:"max_idle_conns"`
+	DatabaseType       string  `hcl:"database_type" json:"database_type"`
+	ConnectionString   string  `hcl:"connection_string" json:"connection_string"`
+	RoConnectionString string  `hcl:"ro_connection_string" json:"ro_connection_string"`
+	ConnMaxLifetime    *string `hcl:"conn_max_lifetime" json:"conn_max_lifetime"`
+	MaxOpenConns       *int    `hcl:"max_open_conns" json:"max_open_conns"`
+	MaxIdleConns       *int    `hcl:"max_idle_conns" json:"max_idle_conns"`
 }
 
 type Plugin struct {

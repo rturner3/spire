@@ -30,8 +30,9 @@ const (
 var (
 	ctx = context.Background()
 
-	TestDialect    string
-	TestConnString string
+	TestDialect      string
+	TestConnString   string
+	TestROConnString string
 )
 
 type PluginSuite struct {
@@ -124,11 +125,12 @@ max_idle_conns = 8
 		cfgHclTemplate := `
 database_type = "mysql"
 connection_string = "%s"
+ro_connection_string = "%s"
 max_conn_lifetime = "1m30s"
 max_open_conns = 5
 max_idle_conns = 5
 `
-		cfgHcl := fmt.Sprintf(cfgHclTemplate, TestConnString)
+		cfgHcl := fmt.Sprintf(cfgHclTemplate, TestConnString, TestROConnString)
 		cfgReq := &spi.ConfigureRequest{
 			Configuration: cfgHcl,
 		}
