@@ -8,8 +8,10 @@ import (
 	"io"
 	"net"
 	"net/url"
+	"os"
 	"path"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/andres-erbsen/clock"
@@ -22,6 +24,7 @@ import (
 	telemetry_common "github.com/spiffe/spire/pkg/common/telemetry/common"
 	telemetry_server "github.com/spiffe/spire/pkg/common/telemetry/server"
 	"github.com/spiffe/spire/pkg/server/ca"
+	"github.com/spiffe/spire/pkg/server/cache/entrycache"
 	"github.com/spiffe/spire/pkg/server/catalog"
 	"github.com/spiffe/spire/pkg/server/plugin/datastore"
 	"github.com/spiffe/spire/pkg/server/plugin/nodeattestor"
@@ -35,9 +38,6 @@ import (
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 )
-
-// Number of agentIDs that can be cached
-const fetchSVIDCacheSize = 500_000
 
 type HandlerConfig struct {
 	Log         logrus.FieldLogger
@@ -56,24 +56,19 @@ type Handler struct {
 	c       HandlerConfig
 	limiter Limiter
 
-	dsCache                       *datastoreCache
-	fetchRegistrationEntriesCache *regentryutil.FetchRegistrationEntriesCache
+	dsCache      *datastoreCache
+	entriesCache *entriesCache
 }
 
 func NewHandler(config HandlerConfig) (*Handler, error) {
 	if config.Clock == nil {
 		config.Clock = clock.New()
 	}
-	fetchX509SVIDCache, err := regentryutil.NewFetchX509SVIDCache(fetchSVIDCacheSize)
-	if err != nil {
-		return nil, fmt.Errorf("could not create cache: %v", err)
-	}
-
 	return &Handler{
-		c:                             config,
-		limiter:                       NewLimiter(config.Log),
-		dsCache:                       newDatastoreCache(config.Catalog.GetDataStore(), config.Clock),
-		fetchRegistrationEntriesCache: fetchX509SVIDCache,
+		c:            config,
+		limiter:      NewLimiter(config.Log),
+		dsCache:      newDatastoreCache(config.Catalog.GetDataStore(), config.Clock),
+		entriesCache: newEntriesCache(config.Log, config.Metrics, config.Catalog.GetDataStore()),
 	}, nil
 }
 
@@ -288,7 +283,7 @@ func (h *Handler) FetchX509SVID(server node.Node_FetchX509SVIDServer) (err error
 			return status.Error(codes.InvalidArgument, err.Error())
 		}
 
-		regEntries, err := regentryutil.FetchRegistrationEntriesWithCache(ctx, h.c.Catalog.GetDataStore(), h.fetchRegistrationEntriesCache, agentID)
+		regEntries, err := h.entriesCache.GetAuthorizedEntries(ctx, agentID)
 		if err != nil {
 			log.WithError(err).Error("Failed to fetch agent registration entries")
 			return status.Error(codes.Internal, "failed to fetch agent registration entries")
@@ -1199,6 +1194,68 @@ func (h *Handler) parseCSR(csrBytes []byte, mode idutil.ValidationMode) (*CSR, e
 		SpiffeID:  spiffeID,
 		PublicKey: csr.PublicKey,
 	}, nil
+}
+
+type entriesCache struct {
+	log            logrus.FieldLogger
+	metrics        telemetry.Metrics
+	ds             datastore.DataStore
+	reloadInterval time.Duration
+
+	mu     sync.RWMutex
+	loaded time.Time
+	cache  *entrycache.Cache
+}
+
+func newEntriesCache(log logrus.FieldLogger, metrics telemetry.Metrics, ds datastore.DataStore) *entriesCache {
+	reloadInterval := time.Second * 5
+	if env := os.Getenv("SPIRE_ENTRY_RELOAD_INTERVAL"); env != "" {
+		if duration, err := time.ParseDuration(env); err == nil {
+			reloadInterval = duration
+		} else {
+			log.WithField("value", env).Warn("Invalid duration value for SPIRE_ENTRY_RELOAD_INTERVAL")
+		}
+	}
+	log.WithField("reload interval", reloadInterval).Info("Authorized entry cache configured")
+
+	return &entriesCache{
+		log:            log,
+		metrics:        metrics,
+		ds:             ds,
+		reloadInterval: reloadInterval,
+	}
+}
+
+func (c *entriesCache) GetAuthorizedEntries(ctx context.Context, agentID string) ([]*common.RegistrationEntry, error) {
+	now := time.Now()
+
+	c.mu.RLock()
+	if !c.loaded.IsZero() && now.Sub(c.loaded) < c.reloadInterval {
+		c.mu.RUnlock()
+		return c.cache.GetAuthorizedEntries(agentID), nil
+	}
+	c.mu.RUnlock()
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.loaded.IsZero() || now.Sub(c.loaded) >= c.reloadInterval {
+		c.log.Debug("Reloading entry cache...")
+		newCache, err := c.rebuildCache(ctx)
+		if err != nil {
+			c.log.WithError(err).Error("Failed to reload entry cache.")
+			return nil, err
+		}
+		c.log.Debug("Reloaded entry cache.")
+		c.cache = newCache
+		c.loaded = time.Now()
+	}
+	return c.cache.GetAuthorizedEntries(agentID), nil
+}
+
+func (c *entriesCache) rebuildCache(ctx context.Context) (_ *entrycache.Cache, err error) {
+	call := telemetry.StartCall(c.metrics, "entry", "cache", "reload")
+	defer call.Done(&err)
+	return entrycache.BuildFromDataStore(ctx, c.ds)
 }
 
 func getPeerCertificateFromRequestContext(ctx context.Context) (cert *x509.Certificate, err error) {

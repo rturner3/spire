@@ -43,6 +43,12 @@ func StartSetNodeSelectorsCall(m telemetry.Metrics) *telemetry.CallCounter {
 	return telemetry.StartCall(m, telemetry.Datastore, telemetry.Node, telemetry.Selectors, telemetry.Set)
 }
 
+// StartGetNodeSelectorsCall return metric
+// for server's datastore, on getting selectors for a node.
+func StartListNodesSelectorsCall(m telemetry.Metrics) *telemetry.CallCounter {
+	return telemetry.StartCall(m, telemetry.Datastore, telemetry.Node, telemetry.Selectors, telemetry.List)
+}
+
 // StartUpdateNodeCall return metric
 // for server's datastore, on updating a node.
 func StartUpdateNodeCall(m telemetry.Metrics) *telemetry.CallCounter {

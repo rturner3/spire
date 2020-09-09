@@ -94,6 +94,10 @@ func TestWithMetrics(t *testing.T) {
 			methodName: "ListAttestedNodes",
 		},
 		{
+			key:        "datastore.node.selectors.list",
+			methodName: "ListNodeSelectors",
+		},
+		{
 			key:        "datastore.bundle.list",
 			methodName: "ListBundles",
 		},
@@ -266,6 +270,10 @@ func (ds *fakeDataStore) ListAttestedNodes(context.Context, *datastore.ListAttes
 
 func (ds *fakeDataStore) ListBundles(context.Context, *datastore.ListBundlesRequest) (*datastore.ListBundlesResponse, error) {
 	return &datastore.ListBundlesResponse{}, ds.err
+}
+
+func (ds *fakeDataStore) ListNodeSelectors(context.Context, *datastore.ListNodeSelectorsRequest) (*datastore.ListNodeSelectorsResponse, error) {
+	return &datastore.ListNodeSelectorsResponse{}, ds.err
 }
 
 func (ds *fakeDataStore) ListRegistrationEntries(context.Context, *datastore.ListRegistrationEntriesRequest) (*datastore.ListRegistrationEntriesResponse, error) {

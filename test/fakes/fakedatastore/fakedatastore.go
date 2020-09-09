@@ -163,6 +163,13 @@ func (s *DataStore) GetNodeSelectors(ctx context.Context, req *datastore.GetNode
 	return resp, err
 }
 
+func (s *DataStore) ListNodeSelectors(ctx context.Context, req *datastore.ListNodeSelectorsRequest) (*datastore.ListNodeSelectorsResponse, error) {
+	if err := s.getNextError(); err != nil {
+		return nil, err
+	}
+	return s.ds.ListNodeSelectors(ctx, req)
+}
+
 func (s *DataStore) CreateRegistrationEntry(ctx context.Context, req *datastore.CreateRegistrationEntryRequest) (*datastore.CreateRegistrationEntryResponse, error) {
 	if err := s.getNextError(); err != nil {
 		return nil, err

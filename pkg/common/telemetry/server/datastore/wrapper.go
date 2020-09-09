@@ -121,6 +121,12 @@ func (w metricsWrapper) ListRegistrationEntries(ctx context.Context, req *datast
 	return w.ds.ListRegistrationEntries(ctx, req)
 }
 
+func (w metricsWrapper) ListNodeSelectors(ctx context.Context, req *datastore.ListNodeSelectorsRequest) (_ *datastore.ListNodeSelectorsResponse, err error) {
+	callCounter := StartListNodesSelectorsCall(w.m)
+	defer callCounter.Done(&err)
+	return w.ds.ListNodeSelectors(ctx, req)
+}
+
 func (w metricsWrapper) PruneBundle(ctx context.Context, req *datastore.PruneBundleRequest) (_ *datastore.PruneBundleResponse, err error) {
 	callCounter := StartPruneBundleCall(w.m)
 	defer callCounter.Done(&err)

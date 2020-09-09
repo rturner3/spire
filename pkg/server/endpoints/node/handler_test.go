@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/gogo/protobuf/proto"
-	lru "github.com/hashicorp/golang-lru"
 	"github.com/sirupsen/logrus"
 	"github.com/sirupsen/logrus/hooks/test"
 	"github.com/spiffe/spire/pkg/common/auth"
@@ -28,7 +27,6 @@ import (
 	"github.com/spiffe/spire/pkg/server/plugin/datastore"
 	"github.com/spiffe/spire/pkg/server/plugin/nodeattestor"
 	"github.com/spiffe/spire/pkg/server/plugin/noderesolver"
-	"github.com/spiffe/spire/pkg/server/util/regentryutil"
 	"github.com/spiffe/spire/proto/spire/api/node"
 	"github.com/spiffe/spire/proto/spire/common"
 	"github.com/spiffe/spire/test/clock"
@@ -98,23 +96,22 @@ func TestHandler(t *testing.T) {
 type HandlerSuite struct {
 	spiretest.Suite
 
-	server                        *grpc.Server
-	logHook                       *test.Hook
-	limiter                       *fakeLimiter
-	handler                       *Handler
-	metrics                       *fakemetrics.FakeMetrics
-	expectedMetrics               *fakemetrics.FakeMetrics
-	unattestedClient              node.NodeClient
-	attestedClient                node.NodeClient
-	ds                            *fakedatastore.DataStore
-	catalog                       *fakeservercatalog.Catalog
-	clock                         *clock.Mock
-	bundle                        *common.Bundle
-	agentSVID                     []*x509.Certificate
-	downstreamSVID                []*x509.Certificate
-	workloadSVID                  []*x509.Certificate
-	serverCA                      *fakeserverca.CA
-	fetchRegistrationEntriesCache *regentryutil.FetchRegistrationEntriesCache
+	server           *grpc.Server
+	logHook          *test.Hook
+	limiter          *fakeLimiter
+	handler          *Handler
+	metrics          *fakemetrics.FakeMetrics
+	expectedMetrics  *fakemetrics.FakeMetrics
+	unattestedClient node.NodeClient
+	attestedClient   node.NodeClient
+	ds               *fakedatastore.DataStore
+	catalog          *fakeservercatalog.Catalog
+	clock            *clock.Mock
+	bundle           *common.Bundle
+	agentSVID        []*x509.Certificate
+	downstreamSVID   []*x509.Certificate
+	workloadSVID     []*x509.Certificate
+	serverCA         *fakeserverca.CA
 }
 
 func (s *HandlerSuite) SetupTest() {
@@ -172,14 +169,6 @@ func (s *HandlerSuite) setupTest(upstreamAuthorityConfig *fakeupstreamauthority.
 	})
 	s.Require().NoError(err)
 	handler.limiter = s.limiter
-	cache, err := lru.New(100)
-	s.Require().NoError(err)
-	s.fetchRegistrationEntriesCache = &regentryutil.FetchRegistrationEntriesCache{
-		Cache:   cache,
-		TimeNow: s.clock.Now,
-	}
-	handler.fetchRegistrationEntriesCache = s.fetchRegistrationEntriesCache
-
 	// Streaming methods and auth are easier to test from the client point of view.
 	// TODO: share the setup done by the "endpoints" code so these don't go out
 	// of sync.
@@ -683,30 +672,6 @@ func (s *HandlerSuite) TestFetchX509SVIDWithNoCSRs() {
 	upd := s.requireFetchX509SVIDSuccess(&node.FetchX509SVIDRequest{})
 
 	s.Equal([]*common.RegistrationEntry{entry}, upd.RegistrationEntries)
-	s.assertBundlesInUpdate(upd, otherDomainBundle)
-	s.Empty(upd.Svids)
-}
-
-func (s *HandlerSuite) TestFetchX509SVIDWithCache() {
-	s.attestAgent()
-	s.createBundle(otherDomainBundle)
-	entry := s.createRegistrationEntry(&common.RegistrationEntry{
-		ParentId:      agentID,
-		SpiffeId:      workloadID,
-		Selectors:     irrelevantSelectors,
-		FederatesWith: []string{otherDomainID},
-	})
-	upd := s.requireFetchX509SVIDSuccess(&node.FetchX509SVIDRequest{})
-
-	s.Equal([]*common.RegistrationEntry{entry}, upd.RegistrationEntries)
-
-	// agentId is not cached
-	_, ok := s.fetchRegistrationEntriesCache.Get(agentID)
-	s.Require().False(ok)
-
-	_, ok = s.fetchRegistrationEntriesCache.Get(workloadID)
-	s.Require().True(ok)
-
 	s.assertBundlesInUpdate(upd, otherDomainBundle)
 	s.Empty(upd.Svids)
 }
