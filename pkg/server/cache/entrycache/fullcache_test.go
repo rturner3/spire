@@ -114,6 +114,82 @@ func TestCache(t *testing.T) {
 	assert.Equal(expected, actual)
 }
 
+func TestFullCacheNodeAliasing(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+	ds := fakedatastore.New(t)
+
+	createRegistrationEntry := func(entry *common.RegistrationEntry) *common.RegistrationEntry {
+		resp, err := ds.CreateRegistrationEntry(context.Background(), &datastore.CreateRegistrationEntryRequest{
+			Entry: entry,
+		})
+		require.NoError(err)
+		return resp.Entry
+	}
+
+	setNodeSelectors := func(spiffeID string, selectors ...*common.Selector) {
+		_, err := ds.SetNodeSelectors(context.Background(), &datastore.SetNodeSelectorsRequest{
+			Selectors: &datastore.NodeSelectors{
+				SpiffeId:  spiffeID,
+				Selectors: selectors,
+			},
+		})
+		assert.NoError(err)
+	}
+
+	agent1ID := "spiffe://example.org/spire/agent/agent1"
+	agent2ID := "spiffe://example.org/spire/agent/agent2"
+	agent3ID := "spiffe://example.org/spire/agent/agent3"
+
+	s1 := &common.Selector{Type: "s", Value: "1"}
+	s2 := &common.Selector{Type: "s", Value: "2"}
+	s3 := &common.Selector{Type: "s", Value: "3"}
+
+	alias1 := createRegistrationEntry(&common.RegistrationEntry{
+		ParentId:  "spiffe://example.org/spire/server",
+		SpiffeId:  "spiffe://example.org/agent1",
+		Selectors: []*common.Selector{s1, s2},
+	})
+
+	alias2 := createRegistrationEntry(&common.RegistrationEntry{
+		ParentId:  "spiffe://example.org/spire/server",
+		SpiffeId:  "spiffe://example.org/agent2",
+		Selectors: []*common.Selector{s1},
+	})
+
+	workload1 := createRegistrationEntry(&common.RegistrationEntry{
+		ParentId:  alias1.SpiffeId,
+		SpiffeId:  "spiffe://example.org/workload1",
+		Selectors: []*common.Selector{{Type: "not", Value: "relevant"}},
+	})
+
+	workload2 := createRegistrationEntry(&common.RegistrationEntry{
+		ParentId:  alias2.SpiffeId,
+		SpiffeId:  "spiffe://example.org/workload2",
+		Selectors: []*common.Selector{{Type: "not", Value: "relevant"}},
+	})
+
+	workload3 := createRegistrationEntry(&common.RegistrationEntry{
+		ParentId:  agent3ID,
+		SpiffeId:  "spiffe://example.org/workload3",
+		Selectors: []*common.Selector{{Type: "not", Value: "relevant"}},
+	})
+
+	setNodeSelectors(agent1ID, s1, s2)
+	setNodeSelectors(agent2ID, s1, s3)
+
+	cache, err := Build(context.Background(), makeEntryIteratorDS(ds), makeAgentIteratorDS(ds))
+	assert.NoError(err)
+
+	assertAuthorizedEntries := func(agentID string, entries ...*common.RegistrationEntry) {
+		assert.Equal(entries, cache.GetAuthorizedEntries(agentID))
+	}
+
+	assertAuthorizedEntries(agent1ID, alias1, workload1, alias2, workload2)
+	assertAuthorizedEntries(agent2ID, alias2, workload2)
+	assertAuthorizedEntries(agent3ID, workload3)
+}
+
 //func TestBuildMem(t *testing.T) {
 //	staticSelector1 := &common.Selector{
 //		Type:  "static",

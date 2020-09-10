@@ -62,7 +62,7 @@ func Build(ctx context.Context, entryIter EntryIterator, agentIter AgentIterator
 		aliasEntry
 		selectors selectorSet
 	}
-	bysel := make(map[Selector]aliasInfo)
+	bysel := make(map[Selector][]aliasInfo)
 
 	entries := make(map[string][]*common.RegistrationEntry)
 	for entryIter.Next(ctx) {
@@ -77,7 +77,7 @@ func Build(ctx context.Context, entryIter EntryIterator, agentIter AgentIterator
 				selectors: selectorSetFromProto(entry.Selectors),
 			}
 			for selector := range alias.selectors {
-				bysel[selector] = alias
+				bysel[selector] = append(bysel[selector], alias)
 			}
 			continue
 		}
@@ -99,16 +99,14 @@ func Build(ctx context.Context, entryIter EntryIterator, agentIter AgentIterator
 		// add one twice.
 		clearSeenSet(aliasSeen)
 		for s := range agentSelectors {
-			alias, ok := bysel[s]
-			if !ok {
-				continue
-			}
-			if _, ok := aliasSeen[alias.id]; ok {
-				continue
-			}
-			aliasSeen[alias.id] = struct{}{}
-			if isSubset(alias.selectors, agentSelectors) {
-				aliases[agentID] = append(aliases[agentID], alias.aliasEntry)
+			for _, alias := range bysel[s] {
+				if _, ok := aliasSeen[alias.entry.EntryId]; ok {
+					continue
+				}
+				aliasSeen[alias.entry.EntryId] = struct{}{}
+				if isSubset(alias.selectors, agentSelectors) {
+					aliases[agentID] = append(aliases[agentID], alias.aliasEntry)
+				}
 			}
 		}
 	}
