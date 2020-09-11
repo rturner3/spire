@@ -1545,8 +1545,9 @@ func getNodeSelectors(ctx context.Context, db *sqlDB, req *datastore.GetNodeSele
 }
 
 func listNodeSelectors(ctx context.Context, db *sqlDB, req *datastore.ListNodeSelectorsRequest) (*datastore.ListNodeSelectorsResponse, error) {
-	query := maybeRebind(db.databaseType, "SELECT spiffe_id, type, value FROM node_resolver_map_entries ORDER BY spiffe_id")
-	rows, err := db.QueryContext(ctx, query)
+	rawQuery, args := buildListNodeSelectorsQuery(req)
+	query := maybeRebind(db.databaseType, rawQuery)
+	rows, err := db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, sqlError.Wrap(err)
 	}
@@ -1556,6 +1557,12 @@ func listNodeSelectors(ctx context.Context, db *sqlDB, req *datastore.ListNodeSe
 
 	var currentID string
 	var selectors []*common.Selector
+	if req.Pagination != nil {
+		selectors = make([]*common.Selector, 0, req.Pagination.PageSize)
+	} else {
+		selectors = make([]*common.Selector, 0, 64)
+	}
+
 	push := func(spiffeID string, selector *common.Selector) {
 		switch {
 		case currentID == "":
@@ -1571,22 +1578,62 @@ func listNodeSelectors(ctx context.Context, db *sqlDB, req *datastore.ListNodeSe
 		selectors = append(selectors, selector)
 	}
 
+	var lastID uint64
+	var selector *common.Selector
 	for rows.Next() {
-		var spiffeID string
-		selector := new(common.Selector)
-		if err := rows.Scan(&spiffeID, &selector.Type, &selector.Value); err != nil {
-			return nil, sqlError.Wrap(err)
+		var nsRow nodeSelectorRow
+		if err := scanNodeSelectorRow(rows, &nsRow); err != nil {
+			return nil, err
 		}
+
+		var spiffeID string
+		if nsRow.SpiffeID.Valid {
+			spiffeID = nsRow.SpiffeID.String
+		}
+
+		selector = new(common.Selector)
+		fillNodeSelectorFromRow(selector, &nsRow)
 		push(spiffeID, selector)
+		lastID = nsRow.EId
 	}
+
+	push("", nil)
 
 	if err := rows.Err(); err != nil {
 		return nil, sqlError.Wrap(err)
 	}
 
-	push("", nil)
+	if req.Pagination != nil {
+		var token string
+		if len(resp.Selectors) > 0 {
+			token = strconv.FormatUint(lastID, 10)
+		}
+		resp.Pagination = &datastore.Pagination{
+			PageSize: req.Pagination.PageSize,
+			Token:    token,
+		}
+	}
 
 	return resp, nil
+}
+
+func buildListNodeSelectorsQuery(req *datastore.ListNodeSelectorsRequest) (query string, args []interface{}) {
+	var sb strings.Builder
+	sb.WriteString("SELECT id, spiffe_id, type, value FROM node_resolver_map_entries")
+	if req.Pagination != nil && req.Pagination.Token != "" {
+		sb.WriteString(" WHERE id > ?")
+		args = append(args, req.Pagination.Token)
+	}
+
+	sb.WriteString(" ORDER BY id ASC")
+
+	if req.Pagination != nil {
+		sb.WriteString(" LIMIT ")
+		pageSize := strconv.FormatInt(int64(req.Pagination.PageSize), 10)
+		sb.WriteString(pageSize)
+	}
+
+	return sb.String(), args
 }
 
 func createRegistrationEntry(tx *gorm.DB, req *datastore.CreateRegistrationEntryRequest) (*datastore.CreateRegistrationEntryResponse, error) {
@@ -2630,6 +2677,32 @@ func fillNodeFromRow(node *common.AttestedNode, r *nodeRow) error {
 	}
 
 	return nil
+}
+
+type nodeSelectorRow struct {
+	EId      uint64
+	SpiffeID sql.NullString
+	Type     sql.NullString
+	Value    sql.NullString
+}
+
+func scanNodeSelectorRow(rs *sql.Rows, r *nodeSelectorRow) error {
+	return sqlError.Wrap(rs.Scan(
+		&r.EId,
+		&r.SpiffeID,
+		&r.Type,
+		&r.Value,
+	))
+}
+
+func fillNodeSelectorFromRow(nodeSelector *common.Selector, r *nodeSelectorRow) {
+	if r.Type.Valid {
+		nodeSelector.Type = r.Type.String
+	}
+
+	if r.Value.Valid {
+		nodeSelector.Value = r.Value.String
+	}
 }
 
 type entryRow struct {

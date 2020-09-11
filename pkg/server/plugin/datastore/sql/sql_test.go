@@ -1269,6 +1269,72 @@ func (s *PluginSuite) TestNodeSelectors() {
 	s.RequireProtoListEqual(bar, selectors)
 }
 
+func (s *PluginSuite) TestListNodeSelectors() {
+	selectorMap := map[string][]*common.Selector{
+		"foo": {
+			{
+				Type:  "foo",
+				Value: "1",
+			},
+		},
+		"bar": {
+			{
+				Type:  "bar",
+				Value: "2",
+			},
+		},
+		"baz": {
+			{
+				Type:  "baz",
+				Value: "3",
+			},
+		},
+	}
+
+	var pagination *datastore.Pagination
+	resp := s.listNodeSelectors(pagination)
+	s.Assert().Empty(resp.Selectors)
+
+	for sID, sel := range selectorMap {
+		s.setNodeSelectors(sID, sel)
+	}
+
+	resp = s.listNodeSelectors(pagination)
+	s.Require().Len(resp.Selectors, len(selectorMap))
+	s.Require().Nil(resp.Pagination)
+
+	pagination = &datastore.Pagination{
+		PageSize: 1,
+	}
+
+	resp = s.listNodeSelectors(pagination)
+	s.Require().Len(resp.Selectors, 1)
+	s.RequireProtoListEqual(selectorMap[resp.Selectors[0].SpiffeId], resp.Selectors[0].Selectors)
+	s.Require().NotNil(resp.Pagination)
+	s.Require().Equal(pagination.PageSize, resp.Pagination.PageSize)
+
+	pagination = resp.Pagination
+	resp = s.listNodeSelectors(pagination)
+	s.Require().Len(resp.Selectors, 1)
+	s.RequireProtoListEqual(selectorMap[resp.Selectors[0].SpiffeId], resp.Selectors[0].Selectors)
+	s.Require().NotNil(resp.Pagination)
+	s.Require().Equal(pagination.PageSize, resp.Pagination.PageSize)
+
+	pagination = resp.Pagination
+	resp = s.listNodeSelectors(pagination)
+	s.Require().Len(resp.Selectors, 1)
+	s.RequireProtoListEqual(selectorMap[resp.Selectors[0].SpiffeId], resp.Selectors[0].Selectors)
+	s.Require().NotNil(resp.Pagination)
+	s.Require().Equal(pagination.PageSize, resp.Pagination.PageSize)
+
+	pagination = resp.Pagination
+	resp = s.listNodeSelectors(pagination)
+	s.Require().Len(resp.Selectors, 0)
+	s.Require().NotNil(resp.Pagination)
+	s.Require().Equal(pagination.PageSize, resp.Pagination.PageSize)
+	s.Require().Empty(resp.Pagination.Token)
+}
+
 func (s *PluginSuite) TestSetNodeSelectorsUnderLoad() {
 	selectors := []*common.Selector{
 		{Type: "TYPE", Value: "VALUE"},
@@ -2502,6 +2568,17 @@ func (s *PluginSuite) getNodeSelectors(spiffeID string, tolerateStale bool) []*c
 	s.Require().NotNil(resp.Selectors)
 	s.Require().Equal(spiffeID, resp.Selectors.SpiffeId)
 	return resp.Selectors.Selectors
+}
+
+func (s *PluginSuite) listNodeSelectors(pagination *datastore.Pagination) *datastore.ListNodeSelectorsResponse {
+	req := &datastore.ListNodeSelectorsRequest{
+		Pagination: pagination,
+	}
+
+	resp, err := s.ds.ListNodeSelectors(ctx, req)
+	s.Require().NoError(err)
+	s.Require().NotNil(resp)
+	return resp
 }
 
 func (s *PluginSuite) setNodeSelectors(spiffeID string, selectors []*common.Selector) {
