@@ -846,7 +846,7 @@ func (h *Handler) getAttestResponse(ctx context.Context, baseSpiffeID string, sv
 	svids := make(map[string]*node.X509SVID)
 	svids[baseSpiffeID] = makeX509SVID(svid)
 
-	regEntries, err := regentryutil.FetchRegistrationEntries(ctx, h.c.Catalog.GetDataStore(), baseSpiffeID)
+	regEntries, err := h.entriesCache.GetAuthorizedEntries(ctx, baseSpiffeID)
 	if err != nil {
 		return nil, err
 	}
