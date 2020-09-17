@@ -1253,7 +1253,7 @@ func (c *entriesCache) GetAuthorizedEntries(ctx context.Context, agentID string)
 }
 
 func (c *entriesCache) rebuildCache(ctx context.Context) (_ *entrycache.Cache, err error) {
-	call := telemetry.StartCall(c.metrics, "entry", "cache", "reload")
+	call := telemetry_server.StartEntryCacheReload(c.metrics)
 	defer call.Done(&err)
 	return entrycache.BuildFromDataStore(ctx, c.ds)
 }

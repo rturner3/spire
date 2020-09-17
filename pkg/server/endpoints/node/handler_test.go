@@ -1430,6 +1430,8 @@ func (s *HandlerSuite) requireAttestSuccess(req *node.AttestRequest, expectedSPI
 	expectedCounter := telemetry_server.StartNodeAPIAttestCall(s.expectedMetrics)
 	defer expectedCounter.Done(nil)
 	telemetry_common.AddAttestorType(expectedCounter, req.AttestationData.Type)
+	expectedEntryCacheReloadCounter := telemetry_server.StartEntryCacheReload(s.expectedMetrics)
+	defer expectedEntryCacheReloadCounter.Done(nil)
 
 	authorizeCounter := telemetry_server.StartNodeAPIAuthorizeCall(s.expectedMetrics, "_spire_api_node_Node_Attest")
 	defer authorizeCounter.Done(nil)
