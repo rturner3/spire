@@ -14,6 +14,12 @@ const (
 	entryPageSize = 5000
 )
 
+var (
+	_ EntryIterator = (*entryIteratorDS)(nil)
+	_ AgentIterator = (*agentIteratorDS)(nil)
+)
+
+// BuildFromDataStore builds a Cache using the provided datastore as the data source
 func BuildFromDataStore(ctx context.Context, ds datastore.DataStore) (*FullEntryCache, error) {
 	return Build(ctx, makeEntryIteratorDS(ds), makeAgentIteratorDS(ds))
 }
@@ -111,6 +117,12 @@ func (it *agentIteratorDS) Err() error {
 	return it.err
 }
 
+// Fetches all agent selectors from the datastore and stores them in the iterator.
+// The request for agent selectors is paginated since the size of the selector data in the datastore
+// can be larger than the gRPC maximum message size.
+// This means that one Agent's selectors could be split across multiple pages of the response from the datastore.
+// Because of this, we need to load all the selectors at once in order to return accurate Agent
+// data to the client.
 func (it *agentIteratorDS) fetchAgents(ctx context.Context) bool {
 	var agents []Agent
 	var token string
@@ -130,9 +142,7 @@ func (it *agentIteratorDS) fetchAgents(ctx context.Context) bool {
 			selectors = nil
 		}
 
-		for _, selector := range curSelectors {
-			selectors = append(selectors, selector)
-		}
+		selectors = append(selectors, curSelectors...)
 	}
 
 	for {

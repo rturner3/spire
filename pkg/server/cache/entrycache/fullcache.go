@@ -25,25 +25,57 @@ type Cache interface {
 type selectorSet map[Selector]struct{}
 type seenSet map[string]struct{}
 
+// Selector is a key-value attribute of a node or workload.
 type Selector struct {
-	Type  string
+	// Type is the type of the selector.
+	Type string
+	// Value is the value of the selector.
 	Value string
 }
 
+// EntryIterator is used to iterate through registration entries from a data source.
+// The usage pattern of the iterator is as follows:
+//   for it.Next() {
+//       entry := it.Entry()
+//       // process entry
+//   }
+//
+//   if it.Err() {
+//       // handle error
+//   }
 type EntryIterator interface {
+	// Next returns true if there are any remaining registration entries in the data source and returns false otherwise.
 	Next(ctx context.Context) bool
+	// Entry returns the next entry from the data source.
 	Entry() *common.RegistrationEntry
+	// Err returns an error encountered when attempting to process entries from the data source.
 	Err() error
 }
 
+// AgentIterator is used to iterate through Agent selectors from a data source.
+// The usage pattern of the iterator is as follows:
+//   for it.Next() {
+//       agent := it.Agent()
+//       // process agent
+//   }
+//
+//   if it.Err() {
+//       // handle error
+//   }
 type AgentIterator interface {
+	// Next returns true if there are any remaining agents in the data source and returns false otherwise.
 	Next(ctx context.Context) bool
+	// Agent returns the next agent from the data source.
 	Agent() Agent
+	// Err returns an error encountered when attempting to process agents from the data source.
 	Err() error
 }
 
+// Agent represents the association of selectors to an agent SPIFFE ID.
 type Agent struct {
-	ID        spiffeid.ID
+	// ID is the Agent's SPIFFE ID.
+	ID spiffeid.ID
+	// Selectors is the Agent's selectors.
 	Selectors []*common.Selector
 }
 
@@ -57,6 +89,8 @@ type FullEntryCache struct {
 	entries map[string][]*common.RegistrationEntry
 }
 
+// Build queries the data source for all registration entries and Agent selectors and builds an in-memory
+// representation of the data that can be used for efficient lookups.
 func Build(ctx context.Context, entryIter EntryIterator, agentIter AgentIterator) (*FullEntryCache, error) {
 	type aliasInfo struct {
 		aliasEntry
@@ -120,6 +154,7 @@ func Build(ctx context.Context, entryIter EntryIterator, agentIter AgentIterator
 	}, nil
 }
 
+// GetAuthorizedEntries gets all authorized registration entries for a given Agent SPIFFE ID.
 func (c *FullEntryCache) GetAuthorizedEntries(agentID string) []*common.RegistrationEntry {
 	seen := allocSeenSet()
 	defer freeSeenSet(seen)
