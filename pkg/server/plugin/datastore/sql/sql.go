@@ -1619,13 +1619,26 @@ func listNodeSelectors(ctx context.Context, db *sqlDB, req *datastore.ListNodeSe
 
 func buildListNodeSelectorsQuery(req *datastore.ListNodeSelectorsRequest) (query string, args []interface{}) {
 	var sb strings.Builder
-	sb.WriteString("SELECT id, spiffe_id, type, value FROM node_resolver_map_entries")
+	var hasWhereClause bool
+	sb.WriteString("SELECT nre.id, nre.spiffe_id, nre.type, nre.value FROM node_resolver_map_entries nre")
+	if req.ValidAt != nil {
+		sb.WriteString(" INNER JOIN attested_node_entries ane ON nre.spiffe_id=ane.spiffe_id WHERE ane.expires_at > ?")
+		args = append(args, time.Unix(req.ValidAt.Seconds, 0))
+		hasWhereClause = true
+	}
 	if req.Pagination != nil && req.Pagination.Token != "" {
-		sb.WriteString(" WHERE id > ?")
+		sqlKeyword := "WHERE"
+		if hasWhereClause {
+			sqlKeyword = "AND"
+		}
+
+		sb.WriteRune(' ')
+		sb.WriteString(sqlKeyword)
+		sb.WriteString(" nre.id > ?")
 		args = append(args, req.Pagination.Token)
 	}
 
-	sb.WriteString(" ORDER BY id ASC")
+	sb.WriteString(" ORDER BY nre.id ASC")
 
 	if req.Pagination != nil {
 		sb.WriteString(" LIMIT ")
