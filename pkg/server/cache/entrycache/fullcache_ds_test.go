@@ -5,6 +5,9 @@ import (
 	"errors"
 	"strconv"
 	"testing"
+	"time"
+
+	"github.com/spiffe/spire/pkg/server/plugin/datastore"
 
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
 
@@ -105,9 +108,19 @@ func TestAgentIteratorDS(t *testing.T) {
 	// Map containing Agent SPIFFE ID -> {Selector type -> Selector value}
 	expectedAgents := make(map[spiffeid.ID]map[string][]string, numAgents)
 	for i := 0; i < numAgents; i++ {
-		agentID, err := spiffeid.FromString("spiffe://example.org/spire/agent/agent" + strconv.Itoa(i))
+		iterStr := strconv.Itoa(i)
+		agentID, err := spiffeid.FromString("spiffe://example.org/spire/agent/agent" + iterStr)
 		require.NoError(t, err)
-		setNodeSelectors(ctx, t, ds, agentID.String(), selectors...)
+		agentIDStr := agentID.String()
+		node := &common.AttestedNode{
+			SpiffeId:            agentIDStr,
+			AttestationDataType: testNodeAttestor,
+			CertSerialNumber:    iterStr,
+			CertNotAfter:        time.Now().Add(24 * time.Hour).Unix(),
+		}
+
+		createAttestedNode(t, ds, node)
+		setNodeSelectors(ctx, t, ds, agentIDStr, selectors...)
 		expectedAgents[agentID] = selMap
 	}
 
@@ -143,4 +156,13 @@ func TestAgentIteratorDS(t *testing.T) {
 		// it.Next() returns false after encountering an error on previous call to Next()
 		assert.False(t, it.Next(ctx))
 	})
+}
+
+func createAttestedNode(t testing.TB, ds datastore.DataStore, node *common.AttestedNode) {
+	req := &datastore.CreateAttestedNodeRequest{
+		Node: node,
+	}
+
+	_, err := ds.CreateAttestedNode(context.Background(), req)
+	require.NoError(t, err)
 }

@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
 	"github.com/spiffe/spire/pkg/server/plugin/datastore"
@@ -23,8 +24,9 @@ import (
 )
 
 const (
-	spiffeScheme = "spiffe"
-	trustDomain  = "example.org"
+	spiffeScheme     = "spiffe"
+	trustDomain      = "example.org"
+	testNodeAttestor = "test-nodeattestor"
 )
 
 var (
@@ -107,6 +109,14 @@ func TestCache(t *testing.T) {
 		entries[i] = createRegistrationEntry(ctx, t, ds, e)
 	}
 
+	node := &common.AttestedNode{
+		SpiffeId:            entryIDs[1],
+		AttestationDataType: "test-nodeattestor",
+		CertSerialNumber:    "node-1",
+		CertNotAfter:        time.Now().Add(24 * time.Hour).Unix(),
+	}
+
+	createAttestedNode(t, ds, node)
 	setNodeSelectors(ctx, t, ds, entryIDs[1], a1, b2)
 
 	cache, err := BuildFromDataStore(context.Background(), ds)
@@ -177,6 +187,17 @@ func TestFullCacheNodeAliasing(t *testing.T) {
 		workloadEntries[i] = createRegistrationEntry(ctx, t, ds, e)
 	}
 
+	for i, agentID := range agentIDs {
+		node := &common.AttestedNode{
+			SpiffeId:            agentID.String(),
+			AttestationDataType: testNodeAttestor,
+			CertSerialNumber:    strconv.Itoa(i),
+			CertNotAfter:        time.Now().Add(24 * time.Hour).Unix(),
+		}
+
+		createAttestedNode(t, ds, node)
+	}
+
 	setNodeSelectors(ctx, t, ds, agentIDs[0].String(), s1, s2)
 	setNodeSelectors(ctx, t, ds, agentIDs[1].String(), s1, s3)
 
@@ -191,6 +212,208 @@ func TestFullCacheNodeAliasing(t *testing.T) {
 	assertAuthorizedEntries(agentIDs[0], append(nodeAliasEntries, workloadEntries[:2]...)...)
 	assertAuthorizedEntries(agentIDs[1], nodeAliasEntries[1], workloadEntries[1])
 	assertAuthorizedEntries(agentIDs[2], workloadEntries[2])
+}
+
+func TestFullCacheExcludesNodeSelectorMappedEntriesForExpiredAgents(t *testing.T) {
+	// This test verifies:
+	// 1) Cache contains no workloads parented to alias entries that are only associated with an expired agent.
+	// 2) Cache contains the workload that is directly parented to the expired Agent's SPIFFE ID.
+	//    This behavior is more of an artifact of the current datastore interface for obtaining registration entries.
+	//    The datastore currently provides no capability to filter out registration entries
+	//    whose parent only corresponds to expired Agents.
+	//
+	// Data used in this test:
+	//
+	// Registration entry graph:
+	// (agent SPIFFE IDs are shown as parented to the root for simplicity of illustrating the hierarchy)
+	//
+	//           ---------------------------root------------------------
+	//          /             |              |               |          \
+	//   group/0          group/1         group/2      agent/active    agent/expired
+	//      |                |              |                |            \
+	//  workload/0       workload/1     workload/2      workload/3     workload/4
+	//
+	// Agents:
+	// - agent/active - has a CertNotAfter that is still valid
+	// - agent/expired - has a CertNotAfter that expired
+	//
+	// agent/active maps to group/0 and group/1 based on selector subset matches.
+	// agent/expired maps to group/0 and group/2 based on selector subset matches.
+	//
+	// Normally, agent/expired should be authorized to receive group/0, workload/0, group/2, workload/2, and workload/4.
+	// However, the cache filters out all entries related to the expired agent other than the ones directly parented to
+	// the agent's SPIFFE ID.
+	// In reality, an expired agent should not be able to request its authorized entries because endpoint security (mTLS)
+	// will prevent the RPC from being handled.
+	// The main point of this test is to demonstrate that the cache is capable of filtering out data that will never be
+	// used by clients in order to minimize the memory footprint.
+	// This is a mitigation for performance problems that arise when hydrating the cache today
+	// due to stale expired Agent data remaining in the datastore: https://github.com/spiffe/spire/issues/1836
+
+	ds := fakedatastore.New(t)
+	ctx := context.Background()
+	serverURI := &url.URL{
+		Scheme: spiffeScheme,
+		Host:   trustDomain,
+		Path:   "/spire/server",
+	}
+
+	serverID := spiffeid.RequireFromURI(serverURI)
+	buildAgentID := func(agentName string) spiffeid.ID {
+		agentURI := &url.URL{
+			Scheme: spiffeScheme,
+			Host:   trustDomain,
+			Path:   fmt.Sprintf("/spire/agent/%s", agentName),
+		}
+
+		return spiffeid.RequireFromURI(agentURI)
+	}
+
+	expiredAgentID := buildAgentID("expired-1")
+	expiredAgentIDStr := expiredAgentID.String()
+	expiredAgent := &common.AttestedNode{
+		SpiffeId:            expiredAgentIDStr,
+		AttestationDataType: testNodeAttestor,
+		CertSerialNumber:    "expired-agent",
+		CertNotAfter:        time.Now().Add(-24 * time.Hour).Unix(),
+	}
+
+	activeAgentID := buildAgentID("active-1")
+	activeAgentIDStr := activeAgentID.String()
+	activeAgent := &common.AttestedNode{
+		SpiffeId:            activeAgentIDStr,
+		AttestationDataType: testNodeAttestor,
+		CertSerialNumber:    "active-agent",
+		CertNotAfter:        time.Now().Add(24 * time.Hour).Unix(),
+	}
+
+	createAttestedNode(t, ds, expiredAgent)
+	createAttestedNode(t, ds, activeAgent)
+
+	globalSelectors := []*common.Selector{
+		{
+			Type:  "static",
+			Value: "global",
+		},
+	}
+
+	const nodeGroupSelectorType = "node-group"
+	expiredAgentSelectors := []*common.Selector{
+		{
+			Type:  nodeGroupSelectorType,
+			Value: "group-1",
+		},
+	}
+
+	expiredAgentSelectors = append(expiredAgentSelectors, globalSelectors...)
+	activeAgentSelectors := []*common.Selector{
+		{
+			Type:  nodeGroupSelectorType,
+			Value: "group-2",
+		},
+	}
+
+	activeAgentSelectors = append(activeAgentSelectors, globalSelectors...)
+
+	setNodeSelectors(ctx, t, ds, expiredAgentIDStr, expiredAgentSelectors...)
+	setNodeSelectors(ctx, t, ds, activeAgentIDStr, activeAgentSelectors...)
+
+	const numAliasEntries = 3
+	aliasEntryIDs := make([]string, numAliasEntries)
+	for i := 0; i < numAliasEntries; i++ {
+		entryURI := &url.URL{
+			Scheme: spiffeScheme,
+			Host:   trustDomain,
+			Path:   fmt.Sprintf("/group/%d", i),
+		}
+
+		aliasEntryIDs[i] = spiffeid.RequireFromURI(entryURI).String()
+	}
+
+	aliasEntriesToCreate := []*common.RegistrationEntry{
+		{
+			ParentId:  serverID.String(),
+			SpiffeId:  aliasEntryIDs[0],
+			Selectors: globalSelectors,
+		},
+		{
+			ParentId:  serverID.String(),
+			SpiffeId:  aliasEntryIDs[1],
+			Selectors: activeAgentSelectors,
+		},
+		{
+			ParentId:  serverID.String(),
+			SpiffeId:  aliasEntryIDs[2],
+			Selectors: expiredAgentSelectors,
+		},
+	}
+
+	aliasEntries := make([]*common.RegistrationEntry, numAliasEntries)
+	for i := 0; i < numAliasEntries; i++ {
+		aliasEntries[i] = createRegistrationEntry(ctx, t, ds, aliasEntriesToCreate[i])
+	}
+
+	const numWorkloadEntries = 5
+	workloadEntryIDs := make([]string, numWorkloadEntries)
+	for i := 0; i < numWorkloadEntries; i++ {
+		entryURI := &url.URL{
+			Scheme: spiffeScheme,
+			Host:   trustDomain,
+			Path:   fmt.Sprintf("/workload/%d", i),
+		}
+
+		workloadEntryIDs[i] = spiffeid.RequireFromURI(entryURI).String()
+	}
+
+	irrelevantSelectors := []*common.Selector{
+		{
+			Type:  "doesn't",
+			Value: "matter",
+		},
+	}
+
+	workloadEntriesToCreate := []*common.RegistrationEntry{
+		{
+			ParentId:  aliasEntries[0].SpiffeId,
+			SpiffeId:  workloadEntryIDs[0],
+			Selectors: irrelevantSelectors,
+		},
+		{
+			ParentId:  aliasEntries[1].SpiffeId,
+			SpiffeId:  workloadEntryIDs[1],
+			Selectors: irrelevantSelectors,
+		},
+		{
+			ParentId:  aliasEntries[2].SpiffeId,
+			SpiffeId:  workloadEntryIDs[2],
+			Selectors: irrelevantSelectors,
+		},
+		{
+			ParentId:  activeAgentIDStr,
+			SpiffeId:  workloadEntryIDs[3],
+			Selectors: irrelevantSelectors,
+		},
+		{
+			ParentId:  expiredAgentIDStr,
+			SpiffeId:  workloadEntryIDs[4],
+			Selectors: irrelevantSelectors,
+		},
+	}
+
+	workloadEntries := make([]*common.RegistrationEntry, numWorkloadEntries)
+	for i := 0; i < numWorkloadEntries; i++ {
+		workloadEntries[i] = createRegistrationEntry(ctx, t, ds, workloadEntriesToCreate[i])
+	}
+
+	c, err := BuildFromDataStore(ctx, ds)
+	require.NoError(t, err)
+	require.NotNil(t, c)
+
+	entries := c.GetAuthorizedEntries(expiredAgentID.String())
+	require.Len(t, entries, 1)
+
+	expectedEntry := workloadEntries[numWorkloadEntries-1]
+	assert.Equal(t, expectedEntry, entries[0])
 }
 
 func TestBuildIteratorError(t *testing.T) {
@@ -256,8 +479,17 @@ func BenchmarkBuildSQL(b *testing.B) {
 		createRegistrationEntry(ctx, b, ds, entry)
 	}
 
-	for _, agent := range agents {
-		setNodeSelectors(ctx, b, ds, agent.ID.String(), agent.Selectors...)
+	for i, agent := range agents {
+		agentIDStr := agent.ID.String()
+		node := &common.AttestedNode{
+			SpiffeId:            agent.ID.String(),
+			AttestationDataType: testNodeAttestor,
+			CertSerialNumber:    strconv.Itoa(i),
+			CertNotAfter:        time.Now().Add(24 * time.Hour).Unix(),
+		}
+
+		createAttestedNode(b, ds, node)
+		setNodeSelectors(ctx, b, ds, agentIDStr, agent.Selectors...)
 	}
 
 	b.ResetTimer()

@@ -2,6 +2,9 @@ package entrycache
 
 import (
 	"context"
+	"time"
+
+	"github.com/golang/protobuf/ptypes/timestamp"
 
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
 
@@ -145,6 +148,10 @@ func (it *agentIteratorDS) fetchAgents(ctx context.Context) bool {
 		selectors = append(selectors, curSelectors...)
 	}
 
+	selectorsValidAt := &timestamp.Timestamp{
+		Seconds: time.Now().Unix(),
+	}
+
 	for {
 		req := &datastore.ListNodeSelectorsRequest{
 			TolerateStale: true,
@@ -152,6 +159,7 @@ func (it *agentIteratorDS) fetchAgents(ctx context.Context) bool {
 				Token:    token,
 				PageSize: agentPageSize,
 			},
+			ValidAt: selectorsValidAt,
 		}
 
 		resp, err := it.ds.ListNodeSelectors(ctx, req)
