@@ -9,18 +9,18 @@ import (
 )
 
 var (
-	selectorSetPool = sync.Pool{
-		New: func() interface{} {
-			return make(selectorSet)
-		},
-	}
-
 	seenSetPool = sync.Pool{
 		New: func() interface{} {
 			return make(seenSet)
 		},
 	}
+
+	_ Cache = (*FullEntryCache)(nil)
 )
+
+type Cache interface {
+	GetAuthorizedEntries(agentID string) []*common.RegistrationEntry
+}
 
 type selectorSet map[Selector]struct{}
 type seenSet map[string]struct{}
@@ -52,12 +52,12 @@ type aliasEntry struct {
 	entry *common.RegistrationEntry
 }
 
-type Cache struct {
+type FullEntryCache struct {
 	aliases map[string][]aliasEntry
 	entries map[string][]*common.RegistrationEntry
 }
 
-func Build(ctx context.Context, entryIter EntryIterator, agentIter AgentIterator) (*Cache, error) {
+func Build(ctx context.Context, entryIter EntryIterator, agentIter AgentIterator) (*FullEntryCache, error) {
 	type aliasInfo struct {
 		aliasEntry
 		selectors selectorSet
@@ -67,7 +67,7 @@ func Build(ctx context.Context, entryIter EntryIterator, agentIter AgentIterator
 	entries := make(map[string][]*common.RegistrationEntry)
 	for entryIter.Next(ctx) {
 		entry := entryIter.Entry()
-		parentID := spiffeIDFromProto(entry.ParentId)
+		parentID := entry.ParentId
 		if isNodeEntry(entry) {
 			alias := aliasInfo{
 				aliasEntry: aliasEntry{
@@ -114,23 +114,23 @@ func Build(ctx context.Context, entryIter EntryIterator, agentIter AgentIterator
 		return nil, err
 	}
 
-	return &Cache{
+	return &FullEntryCache{
 		aliases: aliases,
 		entries: entries,
 	}, nil
 }
 
-func (c *Cache) GetAuthorizedEntries(agentID string) []*common.RegistrationEntry {
+func (c *FullEntryCache) GetAuthorizedEntries(agentID string) []*common.RegistrationEntry {
 	seen := allocSeenSet()
 	defer freeSeenSet(seen)
 
 	return c.getAuthorizedEntries(agentID, seen)
 }
 
-func (c *Cache) getAuthorizedEntries(id string, seen map[string]struct{}) []*common.RegistrationEntry {
+func (c *FullEntryCache) getAuthorizedEntries(id string, seen map[string]struct{}) []*common.RegistrationEntry {
 	entries := c.crawl(id, seen)
 	for _, descendant := range entries {
-		entries = append(entries, c.getAuthorizedEntries(spiffeIDFromProto(descendant.SpiffeId), seen)...)
+		entries = append(entries, c.getAuthorizedEntries(descendant.SpiffeId, seen)...)
 	}
 
 	for _, alias := range c.aliases[id] {
@@ -140,7 +140,7 @@ func (c *Cache) getAuthorizedEntries(id string, seen map[string]struct{}) []*com
 	return entries
 }
 
-func (c *Cache) crawl(parentID string, seen map[string]struct{}) []*common.RegistrationEntry {
+func (c *FullEntryCache) crawl(parentID string, seen map[string]struct{}) []*common.RegistrationEntry {
 	if _, ok := seen[parentID]; ok {
 		return nil
 	}
@@ -149,17 +149,13 @@ func (c *Cache) crawl(parentID string, seen map[string]struct{}) []*common.Regis
 	// Make a copy so that the entries aren't aliasing the backing array
 	entries := append([]*common.RegistrationEntry(nil), c.entries[parentID]...)
 	for _, entry := range entries {
-		entries = append(entries, c.crawl(spiffeIDFromProto(entry.SpiffeId), seen)...)
+		entries = append(entries, c.crawl(entry.SpiffeId, seen)...)
 	}
 	return entries
 }
 
 func spiffeIDFromID(id spiffeid.ID) string {
 	return id.String()
-}
-
-func spiffeIDFromProto(id string) string {
-	return id
 }
 
 func selectorSetFromProto(selectors []*common.Selector) selectorSet {
@@ -170,25 +166,8 @@ func selectorSetFromProto(selectors []*common.Selector) selectorSet {
 	return set
 }
 
-func allocSelectorSet() selectorSet {
-	return selectorSetPool.Get().(selectorSet)
-
-}
-
-func freeSelectorSet(set selectorSet) {
-	clearSelectorSet(set)
-	selectorSetPool.Put(set)
-}
-
-func clearSelectorSet(set selectorSet) {
-	for k := range set {
-		delete(set, k)
-	}
-}
-
 func allocSeenSet() seenSet {
 	return seenSetPool.Get().(seenSet)
-
 }
 
 func freeSeenSet(set seenSet) {

@@ -1204,7 +1204,7 @@ type entriesCache struct {
 
 	mu     sync.RWMutex
 	loaded time.Time
-	cache  *entrycache.Cache
+	cache  entrycache.Cache
 }
 
 func newEntriesCache(log logrus.FieldLogger, metrics telemetry.Metrics, ds datastore.DataStore) *entriesCache {
@@ -1252,7 +1252,7 @@ func (c *entriesCache) GetAuthorizedEntries(ctx context.Context, agentID string)
 	return c.cache.GetAuthorizedEntries(agentID), nil
 }
 
-func (c *entriesCache) rebuildCache(ctx context.Context) (_ *entrycache.Cache, err error) {
+func (c *entriesCache) rebuildCache(ctx context.Context) (_ entrycache.Cache, err error) {
 	call := telemetry_server.StartEntryCacheReload(c.metrics)
 	defer call.Done(&err)
 	return entrycache.BuildFromDataStore(ctx, c.ds)

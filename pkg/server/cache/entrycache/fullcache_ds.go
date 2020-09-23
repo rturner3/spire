@@ -14,7 +14,7 @@ const (
 	entryPageSize = 5000
 )
 
-func BuildFromDataStore(ctx context.Context, ds datastore.DataStore) (*Cache, error) {
+func BuildFromDataStore(ctx context.Context, ds datastore.DataStore) (*FullEntryCache, error) {
 	return Build(ctx, makeEntryIteratorDS(ds), makeAgentIteratorDS(ds))
 }
 
