@@ -215,12 +215,8 @@ func TestFullCacheNodeAliasing(t *testing.T) {
 }
 
 func TestFullCacheExcludesNodeSelectorMappedEntriesForExpiredAgents(t *testing.T) {
-	// This test verifies:
-	// 1) Cache contains no workloads parented to alias entries that are only associated with an expired agent.
-	// 2) Cache contains the workload that is directly parented to the expired Agent's SPIFFE ID.
-	//    This behavior is more of an artifact of the current datastore interface for obtaining registration entries.
-	//    The datastore currently provides no capability to filter out registration entries
-	//    whose parent only corresponds to expired Agents.
+	// This test verifies that the cache contains no workloads parented to alias entries
+	// that are only associated with an expired agent.
 	//
 	// Data used in this test:
 	//
@@ -241,8 +237,8 @@ func TestFullCacheExcludesNodeSelectorMappedEntriesForExpiredAgents(t *testing.T
 	// agent/expired maps to group/0 and group/2 based on selector subset matches.
 	//
 	// Normally, agent/expired should be authorized to receive group/0, workload/0, group/2, workload/2, and workload/4.
-	// However, the cache filters out all entries related to the expired agent other than the ones directly parented to
-	// the agent's SPIFFE ID.
+	// However, the cache filters out all entries related to the expired agent other than ones shared with other Agents
+	// through node selector subset matching - in this case, just workload/0.
 	// In reality, an expired agent should not be able to request its authorized entries because endpoint security (mTLS)
 	// will prevent the RPC from being handled.
 	// The main point of this test is to demonstrate that the cache is capable of filtering out data that will never be
