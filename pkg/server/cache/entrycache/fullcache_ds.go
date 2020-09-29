@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	agentPageSize = 5000
-	entryPageSize = 5000
+	agentPageSize = 500
+	entryPageSize = 500
 )
 
 var (
