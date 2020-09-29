@@ -276,9 +276,7 @@ spec:
           configMap:
             name: spire-server
         - name: spire-server-socket
-          hostPath:
-            path: /run/spire/server-sockets
-            type: DirectoryOrCreate
+          emptyDir: {}
         - name: k8s-workload-registrar
           configMap:
             name: k8s-workload-registrar

@@ -30,6 +30,4 @@ spec:
               readOnly: true
       volumes:
         - name: spire-agent-socket
-          hostPath:
-            path: /run/spire/agent-sockets
-            type: Directory
+          emptyDir: {}
