@@ -67,7 +67,7 @@ require (
 	golang.org/x/tools v0.0.0-20200331025713-a30bf2db82d4
 	google.golang.org/api v0.29.0
 	google.golang.org/genproto v0.0.0-20200331122359-1ee6d9798940
-	google.golang.org/grpc v1.30.0
+	google.golang.org/grpc v1.28.1
 	gopkg.in/DATA-DOG/go-sqlmock.v1 v1.3.0 // indirect
 	gopkg.in/square/go-jose.v2 v2.4.1
 	gopkg.in/tomb.v2 v2.0.0-20161208151619-d5d1b5820637

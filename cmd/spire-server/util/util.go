@@ -35,8 +35,7 @@ func Dial(socketPath string) (*grpc.ClientConn, error) {
 		grpc.WithInsecure(),
 		grpc.WithContextDialer(dialer),
 		grpc.WithBlock(),
-		grpc.FailOnNonTempDialError(true),
-		grpc.WithReturnConnectionError())
+		grpc.FailOnNonTempDialError(true))
 }
 
 func dialer(ctx context.Context, addr string) (net.Conn, error) {
