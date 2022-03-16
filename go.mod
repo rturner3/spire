@@ -33,7 +33,7 @@ require (
 	github.com/google/go-cmp v0.5.7
 	github.com/google/go-tpm v0.3.3
 	github.com/google/go-tpm-tools v0.3.5
-	github.com/googleapis/gax-go/v2 v2.1.1
+	github.com/googleapis/gax-go/v2 v2.2.0
 	github.com/gorilla/handlers v1.5.1
 	github.com/hashicorp/go-hclog v1.2.0
 	github.com/hashicorp/go-plugin v1.4.3
@@ -64,7 +64,7 @@ require (
 	golang.org/x/sys v0.0.0-20220227234510-4e6760a101f9
 	golang.org/x/time v0.0.0-20220224211638-0e9765cccd65
 	google.golang.org/api v0.71.0
-	google.golang.org/genproto v0.0.0-20220304144024-325a89244dc8
+	google.golang.org/genproto v0.0.0-20220310185008-1973136f34c6
 	google.golang.org/grpc v1.45.0
 	google.golang.org/protobuf v1.27.1
 	gopkg.in/square/go-jose.v2 v2.6.0
