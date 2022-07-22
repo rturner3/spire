@@ -5,7 +5,7 @@ go 1.18
 require (
 	cloud.google.com/go/secretmanager v1.5.0
 	cloud.google.com/go/security v1.4.1
-	cloud.google.com/go/storage v1.23.0
+	cloud.google.com/go/storage v1.24.0
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.1.1
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.1.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute v1.0.0
@@ -21,10 +21,10 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.15.14
 	github.com/aws/aws-sdk-go-v2/credentials v1.12.9
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.12.8
-	github.com/aws/aws-sdk-go-v2/service/acmpca v1.17.10
-	github.com/aws/aws-sdk-go-v2/service/ec2 v1.48.0
+	github.com/aws/aws-sdk-go-v2/service/acmpca v1.17.11
+	github.com/aws/aws-sdk-go-v2/service/ec2 v1.50.0
 	github.com/aws/aws-sdk-go-v2/service/iam v1.18.9
-	github.com/aws/aws-sdk-go-v2/service/kms v1.17.5
+	github.com/aws/aws-sdk-go-v2/service/kms v1.18.0
 	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.15.13
 	github.com/aws/aws-sdk-go-v2/service/sts v1.16.9
 	github.com/blang/semver/v4 v4.0.0
@@ -46,7 +46,7 @@ require (
 	github.com/hashicorp/golang-lru v0.5.4
 	github.com/hashicorp/hcl v1.0.1-0.20190430135223-99e2f22d1c94
 	github.com/hashicorp/vault/api v1.7.2
-	github.com/hashicorp/vault/sdk v0.5.2
+	github.com/hashicorp/vault/sdk v0.5.3
 	github.com/imdario/mergo v0.3.13
 	github.com/imkira/go-observer v1.0.3
 	github.com/jinzhu/gorm v1.9.16
@@ -56,7 +56,7 @@ require (
 	github.com/open-policy-agent/opa v0.42.2
 	github.com/prometheus/client_golang v1.12.2
 	github.com/shirou/gopsutil/v3 v3.22.6
-	github.com/sirupsen/logrus v1.8.1
+	github.com/sirupsen/logrus v1.9.0
 	github.com/spiffe/go-spiffe/v2 v2.0.1-0.20220414143532-2ed460a8b9d3
 	github.com/spiffe/spire-api-sdk v1.2.2-0.20220317172821-e2705b35aa09
 	github.com/spiffe/spire-plugin-sdk v1.2.1
@@ -67,9 +67,9 @@ require (
 	golang.org/x/crypto v0.0.0-20220525230936-793ad666bf5e
 	golang.org/x/net v0.0.0-20220624214902-1bab6f366d9e
 	golang.org/x/sync v0.0.0-20220601150217-0de741cfad7f
-	golang.org/x/sys v0.0.0-20220624220833-87e55d714810
+	golang.org/x/sys v0.0.0-20220715151400-c0bba94af5f8
 	golang.org/x/time v0.0.0-20220609170525-579cf78fd858
-	google.golang.org/api v0.87.0
+	google.golang.org/api v0.88.0
 	google.golang.org/genproto v0.0.0-20220706132729-d86698d07c53
 	google.golang.org/grpc v1.48.0
 	google.golang.org/protobuf v1.28.0
@@ -139,7 +139,6 @@ require (
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.1.0 // indirect
-	github.com/googleapis/go-type-adapters v1.0.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-immutable-radix v1.3.1 // indirect
