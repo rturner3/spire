@@ -9,33 +9,9 @@ permissions:
   contents: read
 
 jobs:
-  cache-deps:
-    name: cache-deps (linux)
-    runs-on: ubuntu-22.04
-    timeout-minutes: 30
-
-    permissions:
-      contents: read
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - name: Setup go
-        uses: actions/setup-go@41dfa10bad2bb2ae585af6ee5bb4d7d973ad74ed # v5.1.0
-        with:
-          go-version-file: 'go.mod'
-      - name: Setup dep cache
-        uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4.1.2
-        with:
-          path: ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-      - name: Pull go deps
-        run: go mod download
-
   lint:
     name: lint (linux)
     runs-on: ubuntu-22.04
-    needs: cache-deps
     timeout-minutes: 30
 
     permissions:
@@ -48,16 +24,6 @@ jobs:
         uses: actions/setup-go@41dfa10bad2bb2ae585af6ee5bb4d7d973ad74ed # v5.1.0
         with:
           go-version-file: 'go.mod'
-      - name: Load cached deps
-        uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4.1.2
-        with:
-          path: ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-      - name: Setup build tool cache
-        uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4.1.2
-        with:
-          path: .build
-          key: ${{ runner.os }}-tools-${{ hashFiles('.go-version','Makefile') }}
       - name: Lint
         run: make lint
       - name: Tidy check
@@ -72,7 +38,6 @@ jobs:
       matrix:
         OS: [ubuntu-22.04, macos-latest]
     runs-on: ${{ matrix.OS }}
-    needs: cache-deps
     timeout-minutes: 30
 
     permissions:
@@ -85,18 +50,12 @@ jobs:
         uses: actions/setup-go@41dfa10bad2bb2ae585af6ee5bb4d7d973ad74ed # v5.1.0
         with:
           go-version-file: 'go.mod'
-      - name: Load cached deps
-        uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4.1.2
-        with:
-          path: ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
       - name: Run unit tests
         run: ./.github/workflows/scripts/run_unit_tests.sh
 
   unit-test-race-detector:
     name: unit-test (linux with race detection)
     runs-on: ubuntu-22.04
-    needs: cache-deps
     timeout-minutes: 30
 
     permissions:
@@ -109,18 +68,13 @@ jobs:
         uses: actions/setup-go@41dfa10bad2bb2ae585af6ee5bb4d7d973ad74ed # v5.1.0
         with:
           go-version-file: 'go.mod'
-      - name: Load cached deps
-        uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4.1.2
-        with:
-          path: ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
       - name: Run unit tests
         run: ./.github/workflows/scripts/run_unit_tests_under_race_detector.sh
 
   artifacts:
     name: artifacts (linux)
     runs-on: ubuntu-22.04
-    needs: [cache-deps, images]
+    needs: [images]
     timeout-minutes: 30
 
     permissions:
@@ -154,7 +108,6 @@ jobs:
   images:
     name: images (linux)
     runs-on: ubuntu-22.04
-    needs: [cache-deps]
     timeout-minutes: 30
 
     permissions:
@@ -167,16 +120,6 @@ jobs:
         uses: actions/setup-go@41dfa10bad2bb2ae585af6ee5bb4d7d973ad74ed # v5.1.0
         with:
           go-version-file: 'go.mod'
-      - name: Load cached deps
-        uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4.1.2
-        with:
-          path: ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-      - name: Load cached build tools
-        uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4.1.2
-        with:
-          path: .build
-          key: ${{ runner.os }}-tools-${{ hashFiles('.go-version','Makefile') }}
       - name: Set up QEMU
         uses: docker/setup-qemu-action@49b3bc8e6bdd4a60e6116a5414239cba5943d3cf # v3.2.0
       - name: Set up Docker Buildx
@@ -203,11 +146,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - name: Load cached executables
-        uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4.1.2
-        with:
-          path: ./bin/
-          key: ${{ runner.os }}-executables-${{ hashFiles('**/*.exe') }}
       - name: Build images
         run: make images-windows
       - name: Export images
@@ -223,7 +161,6 @@ jobs:
   build-matrix:
     name: Build matrix
     runs-on: ubuntu-22.04
-    needs: [cache-deps]
     permissions:
       contents: read
     steps:
@@ -243,7 +180,7 @@ jobs:
   integration:
     name: integration (linux)
     runs-on: ubuntu-22.04
-    needs: [cache-deps, images]
+    needs: [images]
     timeout-minutes: 45
 
     permissions:
@@ -269,16 +206,6 @@ jobs:
           go-version-file: 'go.mod'
       - name: Install regctl
         uses: regclient/actions/regctl-installer@b6614f5f56245066b533343a85f4109bdc38c8cc # main
-      - name: Load cached deps
-        uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4.1.2
-        with:
-          path: ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-      - name: Load cached build tools
-        uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4.1.2
-        with:
-          path: .build
-          key: ${{ runner.os }}-tools-${{ hashFiles('.go-version','Makefile') }}
       - name: Download archived images
         uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
         with:
@@ -301,7 +228,7 @@ jobs:
   integration-k8s:
     name: integration-k8s
     runs-on: ubuntu-22.04
-    needs: [cache-deps, images, build-matrix]
+    needs: [images, build-matrix]
     timeout-minutes: 45
 
     permissions:
@@ -329,16 +256,6 @@ jobs:
           go-version-file: 'go.mod'
       - name: Install regctl
         uses: regclient/actions/regctl-installer@b6614f5f56245066b533343a85f4109bdc38c8cc # main
-      - name: Load cached deps
-        uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4.1.2
-        with:
-          path: ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-      - name: Load cached build tools
-        uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4.1.2
-        with:
-          path: .build
-          key: ${{ runner.os }}-tools-${{ hashFiles('.go-version','Makefile') }}
       - name: Download archived images
         uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
         with:
@@ -384,17 +301,6 @@ jobs:
         uses: actions/setup-go@41dfa10bad2bb2ae585af6ee5bb4d7d973ad74ed # v5.1.0
         with:
           go-version-file: 'go.mod'
-          cache: true
-      - name: Load cached deps
-        uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4.1.2
-        with:
-          path: ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-      - name: Load cached build tools
-        uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4.1.2
-        with:
-          path: .build
-          key: ${{ runner.os }}-tools-${{ hashFiles('.go-version','Makefile') }}
       - name: Install msys2
         uses: msys2/setup-msys2@ddf331adaebd714795f1042345e6ca57bd66cea8 # v2.24.1
         with:
@@ -414,39 +320,9 @@ jobs:
         # Run all tests for now
         run: make integration-windows
 
-  cache-deps-windows:
-    name: cache-deps (windows)
-    runs-on: windows-2022
-    timeout-minutes: 45
-
-    env:
-      GOPATH: 'D:\golang\go'
-      GOCACHE: 'D:\golang\cache'
-      GOMODCACHE: 'D:\golang\modcache'
-
-    permissions:
-      contents: read
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - name: Setup go
-        uses: actions/setup-go@41dfa10bad2bb2ae585af6ee5bb4d7d973ad74ed # v5.1.0
-        with:
-          go-version-file: 'go.mod'
-          cache: true
-      - name: Setup dep cache
-        uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4.1.2
-        with:
-          path: ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-      - name: Pull go deps
-        run: go mod download
-
   lint-windows:
     name: lint (windows)
     runs-on: windows-2022
-    needs: cache-deps-windows
     timeout-minutes: 45
 
     env:
@@ -467,17 +343,6 @@ jobs:
         uses: actions/setup-go@41dfa10bad2bb2ae585af6ee5bb4d7d973ad74ed # v5.1.0
         with:
           go-version-file: 'go.mod'
-          cache: true
-      - name: Load cached deps
-        uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4.1.2
-        with:
-          path: ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-      - name: Setup build tool cache
-        uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4.1.2
-        with:
-          path: .build
-          key: ${{ runner.os }}-tools-${{ hashFiles('.go-version','Makefile') }}
       - name: Install msys2
         uses: msys2/setup-msys2@ddf331adaebd714795f1042345e6ca57bd66cea8 # v2.24.1
         with:
@@ -495,7 +360,6 @@ jobs:
   unit-test-windows:
     name: unit-test (windows)
     runs-on: windows-2022
-    needs: cache-deps-windows
     timeout-minutes: 45
 
     env:
@@ -516,12 +380,6 @@ jobs:
         uses: actions/setup-go@41dfa10bad2bb2ae585af6ee5bb4d7d973ad74ed # v5.1.0
         with:
           go-version-file: 'go.mod'
-          cache: true
-      - name: Load cached deps
-        uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4.1.2
-        with:
-          path: ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
       - name: Install msys2
         uses: msys2/setup-msys2@ddf331adaebd714795f1042345e6ca57bd66cea8 # v2.24.1
         with:
@@ -535,7 +393,6 @@ jobs:
   artifacts-windows:
     name: artifacts (windows)
     runs-on: windows-2022
-    needs: cache-deps-windows
     timeout-minutes: 45
 
     env:
@@ -556,17 +413,6 @@ jobs:
         uses: actions/setup-go@41dfa10bad2bb2ae585af6ee5bb4d7d973ad74ed # v5.1.0
         with:
           go-version-file: 'go.mod'
-          cache: true
-      - name: Load cached deps
-        uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4.1.2
-        with:
-          path: ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-      - name: Load cached build tools
-        uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4.1.2
-        with:
-          path: .build
-          key: ${{ runner.os }}-tools-${{ hashFiles('.go-version','Makefile') }}
       - name: Install msys2
         uses: msys2/setup-msys2@ddf331adaebd714795f1042345e6ca57bd66cea8 # v2.24.1
         with:
@@ -576,11 +422,6 @@ jobs:
             git base-devel mingw-w64-x86_64-toolchain zip unzip
       - name: Build binaries
         run: make build
-      - name: Setup executables cache
-        uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4.1.2
-        with:
-          path: ./bin/
-          key: ${{ runner.os }}-executables-${{ hashFiles('**/*.exe') }}
       - name: Build artifacts
         run: ./.github/workflows/scripts/build_artifacts.sh ${{ runner.os }}
       - name: Archive artifacts
